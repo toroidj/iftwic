@@ -1,0 +1,313 @@
+ ------------------------------------------------------------------------------
+	WIC Susie Plug-in		Version 2.2 Copyright (c)2013-2024 TORO
+ ------------------------------------------------------------------------------
+
+	Windows XP/2003 以降から使用可能な WIC(Windows Imaging Component)
+	を使って各種画像を読み込むための Susie Plug-in です。
+	64bit アプリケーション用のプラグインが用意されています。
+
+	また、WIC で標準で扱えない png 形式アイコン(.ico)、カーソル(.cur)
+	アニメーションカーソル(.ani)の読み込みにも対応しています。
+
+	Susie Plug-in は、竹村嘉人 (たけちん)氏作の画像ローダ「Susie」
+	用の Plug-in で、様々な形式の画像ファイルを読み込めるようにする
+	ためのものです。
+	( http://www.digitalpad.co.jp/~takechin/ )
+
+
+●動作環境
+・対応/動作確認 OS
+
+	Windows 2003/XP 以降で動作します。
+
+・レジストリ
+
+	レジストリは使用しません。
+
+
+●WICについて
+
+	WIC は標準で、BMP, PNG, ICO, JPG(JPEG), GIF, TIFF, HDP(HD Photo)
+	形式に対応しており、追加のコーデックをインストールすることに
+	より任意の形式を増やすことができます。
+	追加コーデックは Webp の他、デジタルカメラのRAW画像用が多く
+	提供されています。
+
+	WIC は Windows Vista/2008 以降は標準でインストールされています。
+	Windows XP/2003 は System32 に WindowsCodecs.dll が無ければ、
+	WIC がインストールされていません。以前 Microsoft が公開していた
+	XP 用 WIC を入手してください。
+
+
+●インストール
+
+	Susie Plug-in 用のディレクトリに iftwic.spi をコピーしてください。
+	64bit アプリケーションの場合は、iftwic.sph をコピーしてください
+
+	「For View」内の iftwic は、予めアスペクト比調整や透過加工の
+	設定が済んでいる、表示のために本 Plug-in を使用するアプリケーション
+	向けです。透過処理等を自前で行うアプリケーションは、書庫直下の
+	Plug-in を使用してください。※両者の違いは初期設定のみです。
+
+	「ARM」内の iftwic.spha は、ARM64 ネイティブアプリケーション向けです。
+
+
+●アンインストール
+
+	コピーした iftwic.spi / iftwic.sph を削除してください。
+
+
+●設定と設定の保存先
+
+	次の設定を行うことができます。
+
+	・カメラの回転情報(Exif)を反映する
+	　　回転情報にあわせて画像を回転させます。
+
+	・カラーを sRGB に調整する(低速)
+
+	・ICCプロファイル付画像なら埋め込む
+	　　BMPv5形式を読み込めるソフト限定の設定です
+
+	・透過情報が無い32bit画像を24bit画像に変換する
+	　　透過無し32bit画像が、全透過扱いになるソフト用設定です
+
+	・パレットから透過情報を除去する
+	　　パレットに透過情報があると異常動作するソフト用設定です
+
+	・透過画像の背景を格子柄にする
+	　　透過部分を格子柄に加工します。
+
+	・アスペクト比調整をする
+	　　FAX画像のようにアスペクト比が1:1でない画像を1:1に加工します。
+
+	・Susie 0.4xのサムネイル表示対策
+	　　32bit画像が正しくサムネイル表示できないときの設定です
+
+	・ユーザ別に設定を保存する
+	　　ユーザ別の時は、%APPDATA%\TOROID (Window Vista/7/8/10 等なら
+	　　　C:\Users\ユーザ名\AppData\Roaming\TOROID )、
+	　　　共通の時は iftwic.spi/sph と同じ場所、
+	　　　に iftwic.cfg を作成して保存します。
+
+	・使用するコーデック
+	　　使用可能なコーデック一覧です。読み込む拡張子を選択できます。
+	　　　 IsSupported API でサポートしていると返す拡張子を選択する
+	　　　ための一覧であり、IsSupported API を呼ばずに GetPicture
+	　　　API を使用する一部のアプリケーションに対しては効果ありません。
+	　　　また、選択したコーデックを必ず使用するわけではありません。
+
+	・簡易ページめくり
+	　　有効にするとアプリ側で読み込み／最新の情報に更新を行う毎に
+	　　次のフレームに切り替わります。連続して再読み込みすることで
+	　　簡易アニメーションとしても利用できます。
+
+
+	※iftwic.cfg を直接編集することが必要な設定
+	  格子柄の一つ目／二つ目の色。現在はグレースケール以外の色は使えません
+	  X_GridColor1 = 216,216,216
+	  X_GridColor2 = 224,224,224
+
+
+●64bit版 Susie Plug-in の仕様について
+
+	64bit版の正式な仕様がないため、次のような仕様にしています。
+	また、拡張子は .sph としています。
+
+	ファイルサイズと時刻に関わる部分と、コールバックの追加引数を
+	64bit化した以外はそのままになっています。
+
+//-------------------------------------- DLL 定数
+#define SUSIEERROR_NOERROR       0
+#define SUSIEERROR_NOTSUPPORT   -1
+#define SUSIEERROR_USERCANCEL    1
+#define SUSIEERROR_UNKNOWNFORMAT 2
+#define SUSIEERROR_BROKENDATA    3
+#define SUSIEERROR_EMPTYMEMORY   4
+#define SUSIEERROR_FAULTMEMORY   5
+#define SUSIEERROR_FAULTREAD     6
+#define SUSIEERROR_RESERVED      7
+#define SUSIEERROR_INTERNAL      8
+
+typedef ULONG_PTR susie_time_t;
+//-------------------------------------- DLL 構造体
+#pragma pack(push, 1)
+typedef struct PictureInfo{
+    long    left, top;	// 画像を展開する位置
+    long    width;	// 画像の幅(pixel)
+    long    height;	// 画像の高さ(pixel)
+    WORD    x_density;	// 画素の水平方向密度
+    WORD    y_density;	// 画素の垂直方向密度
+    short   colorDepth;	// １画素当たりのbit数
+    #ifdef _WIN64
+      char  dummy[2]; // アラインメント
+    #endif
+    HLOCAL  hInfo;	// 画像内のテキスト情報
+} SUSIE_PICTUREINFO;
+
+typedef struct {
+    unsigned char  method[8];	// 圧縮法の種類
+    ULONG_PTR      position;	// ファイル上での位置
+    ULONG_PTR      compsize;	// 圧縮されたサイズ
+    ULONG_PTR      filesize;	// 元のファイルサイズ
+    susie_time_t   timestamp;	// ファイルの更新日時
+    char           path[200];	// 相対パス
+    char           filename[200];	// ファイル名
+    unsigned long  crc;	// CRC
+    #ifdef _WIN64
+       // 64bit版の構造体サイズは444bytesですが、実際のサイズは
+       // アラインメントにより448bytesになります。環境によりdummyが必要です。
+       char        dummy[4];
+    #endif
+} SUSIE_FINFO;
+
+typedef struct {
+    unsigned char  method[8];	// 圧縮法の種類
+    ULONG_PTR      position;	// ファイル上での位置
+    ULONG_PTR      compsize;	// 圧縮されたサイズ
+    ULONG_PTR      filesize;	// 元のファイルサイズ
+    susie_time_t   timestamp;	// ファイルの更新日時
+    WCHAR          path[200];	// 相対パス
+    WCHAR          filename[200];	// ファイルネーム
+    unsigned long  crc;		// CRC
+    #ifdef _WIN64
+       // 64bit版の構造体サイズは844bytesですが、実際のサイズは
+       // アラインメントにより848bytesになります。環境によりdummyが必要です。
+       char        dummy[4];
+    #endif
+} SUSIE_FINFOW;
+#pragma pack(pop)
+
+// コールバック
+typedef int (__stdcall *SUSIE_PROGRESS)(int nNum, int nDenom, LONG_PTR lData);
+
+//-------------------------------------- DLL 関数(UNICODE版(～W)もあります)
+int __stdcall GetPluginInfo(int infono, LPSTR buf, int buflen);
+int __stdcall GetPluginInfoW(int infono, LPWSTR buf, int buflen);
+int __stdcall IsSupported(LPCSTR filename, void *dw);
+int __stdcall IsSupportedW(LPCWSTR filename, void *dw);
+int __stdcall ConfigurationDlg(HWND hWnd, int function);
+int __stdcall GetPictureInfo(LPCSTR buf, LONG_PTR len, unsigned int flag, struct PictureInfo *lpInfo);
+int __stdcall GetPictureInfoW(LPCWSTR buf, LONG_PTR len, unsigned int flag, struct PictureInfo *lpInfo);
+int __stdcall GetPicture(LPCSTR buf, LONG_PTR len, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, SUSIE_PROGRESS lpPrgressCallback, LONG_PTR lData);
+int __stdcall GetPictureW(LPCWSTR buf, LONG_PTR len, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, SUSIE_PROGRESS lpPrgressCallback, LONG_PTR lData);
+int __stdcall GetPreview(LPCSTR buf, LONG_PTR len, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, SUSIE_PROGRESS lpPrgressCallback, LONG_PTR lData);
+int __stdcall GetPreviewW(LPCWSTR buf, LONG_PTR len, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, SUSIE_PROGRESS lpPrgressCallback, LONG_PTR lData);
+int __stdcall GetArchiveInfo(LPCSTR buf, LONG_PTR len, unsigned int flag, HLOCAL *lphInf);
+int __stdcall GetArchiveInfoW(LPCWSTR buf, LONG_PTR len, unsigned int flag, HLOCAL *lphInf);
+int __stdcall GetFile(LPCSTR src, LONG_PTR len, LPSTR dest, unsigned int flag, SUSIE_PROGRESS prgressCallback, LONG_PTR lData);
+int __stdcall GetFileW(LPCWSTR src, LONG_PTR len, LPWSTR dest, unsigned int flag, SUSIE_PROGRESS prgressCallback, LONG_PTR lData);
+int __stdcall GetFileInfo(LPCSTR buf, LONG_PTR len, LPCSTR filename, unsigned int flag, SUSIE_FINFO *lpInfo);
+int __stdcall GetFileInfoW(LPCWSTR buf, LONG_PTR len, LPCWSTR filename, unsigned int flag, SUSIE_FINFOW *lpInfo);
+int __stdcall CreatePicture(LPCSTR filepath, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, struct PictureInfo *lpInfo, SUSIE_PROGRESS progressCallback, LONG_PTR lData); // filepath の拡張子で保存形式を決定
+int __stdcall CreatePictureW(LPCWSTR filepath, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, struct PictureInfo *lpInfo, SUSIE_PROGRESS progressCallback, LONG_PTR lData); // filepath の拡張子で保存形式を決定
+
+// DLL 動的読み込み用
+typedef int (__stdcall *GETPLUGININFO)(int infono, LPSTR buf, int buflen);
+typedef int (__stdcall *GETPLUGININFOW)(int infono, LPWSTR buf, int buflen);
+typedef int (__stdcall *ISSUPPORTED)(LPCSTR filename, void *dw);
+typedef int (__stdcall *ISSUPPORTEDW)(LPCWSTR filename, void *dw);
+typedef int (__stdcall *CONFIGURATIONDLG)(HWND hWnd, int function);
+typedef int (__stdcall *GETPICTUREINFO)(LPCSTR buf, LONG_PTR len, unsigned int flag, struct PictureInfo *lpInfo);
+typedef int (__stdcall *GETPICTUREINFOW)(LPCWSTR buf, LONG_PTR len, unsigned int flag, struct PictureInfo *lpInfo);
+typedef int (__stdcall *GETPICTURE)(LPCSTR buf, LONG_PTR len, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, SUSIE_PROGRESS lpPrgressCallback, LONG_PTR lData);
+typedef int (__stdcall *GETPICTUREW)(LPCWSTR buf, LONG_PTR len, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, SUSIE_PROGRESS lpPrgressCallback, LONG_PTR lData);
+typedef int (__stdcall *GETPREVIEW)(LPCSTR buf, LONG_PTR len, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, SUSIE_PROGRESS lpPrgressCallback, LONG_PTR lData);
+typedef int (__stdcall *GETPREVIEWW)(LPCWSTR buf, LONG_PTR len, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, SUSIE_PROGRESS lpPrgressCallback, LONG_PTR lData);
+typedef int (__stdcall *GETARCHIVEINFO)(LPCSTR buf, LONG_PTR len, unsigned int flag, HLOCAL *lphInf);
+typedef int (__stdcall *GETARCHIVEINFOW)(LPCWSTR buf, LONG_PTR len, unsigned int flag, HLOCAL *lphInf);
+typedef int (__stdcall *GETFILE)(LPCSTR src, LONG_PTR len, LPSTR dest, unsigned int flag, SUSIE_PROGRESS prgressCallback, LONG_PTR lData);
+typedef int (__stdcall *GETFILEW)(LPCWSTR src, LONG_PTR len, LPWSTR dest, unsigned int flag, FARPROC prgressCallback, LONG_PTR lData);
+typedef int (__stdcall *GETFILEINFO)(LPCSTR buf, LONG_PTR len, LPCSTR filename, unsigned int flag, SUSIE_FINFO *lpInfo);
+typedef int (__stdcall *GETFILEINFOW)(LPCWSTR buf, LONG_PTR len, LPCWSTR filename, unsigned int flag, SUSIE_FINFOW *lpInfo);
+typedef int (__stdcall *CREATEPICTURE)(LPCSTR filepath, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, void *lpInfo, void *progressCallback, LONG_PTR lData);
+typedef int (__stdcall *CREATEPICTUREW)(LPCWSTR filepath, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, void *lpInfo, void *progressCallback, LONG_PTR lData);
+
+
+●最後に
+
+	・このソフトウェアはフリーソフトウェアです。著作権は「TORO」、
+	  「高橋 良和」にあります。
+
+	・このソフトウェアを使用した事による利益・損害等は、こちらでは
+	  一切責任を負いません。
+
+	・転載は自由に行えます。
+	  本ソフトウェアが主となる営利目的での配布・使用はこちらに連絡下さい。
+
+	・Visual Studio 2008 で構築しています。
+	  ARM64版は、Visual Studio 2019 を用いて構築しています。
+
+	・ソースを添付しています。個人で使用する範囲であれば自由に改変す
+	  ることができます。尚、プロジェクトファイルを添付していますが、
+	  配布ファイルの構築には使用しておらず、makefileを使用しています。
+
+
+●履歴
+Version 2.2	2024/03/09
+・0 バイトのファイルの読み込み時に異常終了することがあるのを修正
+
+Version 2.1	2022/09/18
+・ソフトによっては設定の読み込みに失敗する問題を修正
+
+Version 2.0	2021/11/28
+・独自API追加に伴う内部構成の変更
+・簡易ページめくり設定(読み込むたびに次のフレーム)を追加
+・透過扱いにする画像形式を追加
+・透過画像の背景を格子柄にするとき、32bit画像を24bit画像に変換できないのを修正
+・透過画像の背景を格子柄にするときの格子柄の色を指定可能に(IFTWIC.CFG直接変更)
+
+Version 1.9	2020/03/08
+・表示ソフト向け設定をした Plug-in を for View フォルダに用意した
+・透過情報、アスペクト比調整を Plug-in 側で行う設定を追加
+・使用コーデック一覧にコーデックの情報を表示するようにした
+・ARM64 版を試作
+
+Version 1.8	2018/06/17
+・png形式アイコン(.ico)やアニメーションカーソル(.ani)の読み込みに独自対応
+
+Version 1.7	2018/03/03
+・2bit色Gray PNGの読み込みに失敗するのを修正
+・GetPictureInfo を実装し直した
+
+Version 1.6	2017/11/25
+・マルチスレッドで使用する場合の調整を行った
+
+Version 1.5	2017/07/14
+・透過無し32bit画像でも有りとして扱い、全透過してしまうソフトのための設定を追加
+・設定ダイアログのフォント種類・サイズをWindowsから取得するようにした
+
+Version 1.4	2017/01/14
+・Version1.3で、ICCプロファイル+パレット付画像の展開に失敗していたのを修正
+
+Version 1.3	2016/08/27
+・ICCプロファイル付画像ならICCプロファイル付き展開する設定を追加(要対応ソフト)
+
+Version 1.2	2015/07/11
+・IsSupported,GetPictureInfo の処理を調整した
+・2bit色PNGの読み込みに失敗するのを修正
+
+Version 1.1	2014/01/18
+・使用するコーデックを設定ダイアログで指定できるようにした
+・GetPictureInfo でダミー情報を返すことで、Hamanaで表示できるようにした
+・Susie 3.xのカタログ表示が32bit画像に対応していない問題に対応する設定を追加
+
+Version 1.0	2013/05/11
+・CreatePictureを追加
+
+Version 0.3	2013/04/13
+・設定ダイアログを追加
+・カラープロファイル付きファイルなら、sRGB に変換する設定を追加
+・Exifによる回転補正をする設定を追加
+・GetPreviewによるサムネイル画像取得をできるようにした(TIFF/JPEG/WDP等)
+
+Version 0.2	2013/04/02
+・8bit color等の画像を正しく扱えなかったのを修正
+
+Version 0.1	2013/03/30
+・初版
+
+●連絡先／一次配布先						TORO／高橋 良和
+
+E-mail	toroid.jp@gmail.com
+WWW	http://toro.d.dooo.jp/index.html

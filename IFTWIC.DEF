@@ -1,0 +1,15 @@
+EXPORTS
+ GetPluginInfoW	@1
+ IsSupportedW	@2
+ GetPictureInfoW @3
+ GetPictureW	@4
+ GetPreviewW	@5
+ GetPluginInfo	@6
+ IsSupported	@7
+ GetPictureInfo	@8
+ GetPicture	@9
+ GetPreview	@10
+ CreatePicture	@11
+ CreatePictureW	@12
+ ConfigurationDlg	@13
+ DecodePictureW	@14
