@@ -1,14 +1,15 @@
-WIC Susie Plug-in
+# WIC Susie Plug-in
 
-Windows XP/2003 �ȍ~����g�p�\�� WIC(Windows Imaging Component)
-���g���Ċe��摜��ǂݍ��ނ��߂� Susie Plug-in �ł��B
-64bit �A�v���P�[�V�����p�̃v���O�C�����p�ӂ���Ă��܂��B
+Windows XP/2003 以降から使用可能な WIC(Windows Imaging Component)
+を使って各種画像を読み込むための Susie Plug-in です。
+64bit アプリケーション用のプラグインが用意されています。
 
-�܂��AWIC �ŕW���ň����Ȃ� png �`���A�C�R��(.ico)�A�J�[�\��(.cur)
-�A�j���[�V�����J�[�\��(.ani)�̓ǂݍ��݂ɂ��Ή����Ă��܂��B
+また、WIC で標準で扱えない png 形式アイコン(.ico)、カーソル(.cur)
+アニメーションカーソル(.ani)の読み込みにも対応しています。
 
-Susie Plug-in �́A�|���Ðl (��������)����̉摜���[�_�uSusie�v
-�p�� Plug-in �ŁA�l�X�Ȍ`���̉摜�t�@�C����ǂݍ��߂�悤�ɂ���
-���߂̂��̂ł��B
-( http://www.digitalpad.co.jp/~takechin/ )
+Susie Plug-in は、竹村嘉人 (たけちん)氏作の画像ローダ「Susie」
+用の Plug-in で、様々な形式の画像ファイルを読み込めるようにする
+ためのものです。
+( https://www.digitalpad.co.jp/~takechin/ )
 
+詳細は、iftwic.txt を参照してください。

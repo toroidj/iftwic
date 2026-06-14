@@ -39,6 +39,8 @@ COLORREF X_GridColor2 = 0xe0e0e0;	// グリッド二色目
 int X_TinyPage = 0;				// 簡易ページめくり
 #endif
 
+int X_InfoText = 0;				// Exif等の情報を出力
+
 #define XCP_OFF 0
 #define XCP_sRGB 1 // sRGB に変換
 #define XCP_Embed 2 // BMPv5として埋め込む
@@ -316,7 +318,8 @@ void DumpConfig(HWND hDlg, int WriteMode)
 			"SusieFix\t= %d\r\n"
 			"GridColor1\t= %d,%d,%d\r\n"
 			"GridColor2\t= %d,%d,%d\r\n"
-			"TinyPage\t= %d\r\n",
+			"TinyPage\t= %d\r\n"
+			"InfoText\t= %d\r\n",
 			X_ColorProfile,
 			X_ExifRotate,
 			X_Conv32NoAlpha,
@@ -326,7 +329,8 @@ void DumpConfig(HWND hDlg, int WriteMode)
 			X_SusieFix,
 			(X_GridColor1 & 0xff), ((X_GridColor1 >> 8) & 0xff), X_GridColor1 >> 16,
 			(X_GridColor2 & 0xff), ((X_GridColor2 >> 8) & 0xff), X_GridColor2 >> 16,
-			X_TinyPage);
+			X_TinyPage,
+			X_InfoText);
 	{
 		CODECLISTITEMSTRUCT *codeclistp = codecs.list;
 		int leftcodecs = codecs.count, index = 0;
@@ -450,6 +454,7 @@ void LoadCfg(void)
 		if ( FALSE != LoadColor(buf, "GridColor2", ptr, &X_GridColor2) ) continue;
 		if ( FALSE != LoadNumber(buf, "FixAspect", ptr, &X_FixAspect) ) continue;
 		if ( FALSE != LoadNumber(buf, "TinyPage", ptr, &X_TinyPage) ) continue;
+		if ( FALSE != LoadNumber(buf, "InfoText", ptr, &X_InfoText) ) continue;
 		if ( FALSE != LoadNumber(buf, "MergeAlpha", ptr, &X_MergeAlpha) ){
 			DoneDisables = TRUE;
 			continue;
@@ -1200,7 +1205,7 @@ void GetPixelInfo(void)
 	SetColorbitsTransform(GUID_WICPixelFormat24bppBGR, WICBitmapPaletteTypeCustom);
 }
 
-void SetBitmapinfoHeader(HANDLE *pHBInfo)
+void SetBitmapinfoHeader(HLOCAL *pHBInfo)
 {
 	if ( m_ICCsize == 0 ){
 		*pHBInfo = LocalAlloc(LMEM_FIXED, sizeof(BITMAPINFOHEADER) + (sizeof(RGBQUAD) * m_colors) + m_bits_size );
@@ -1387,11 +1392,11 @@ void ConvertAlpha(MaskBits *bmpptr)
 	}
 }
 
-void ScaleTo24(HANDLE *pHBm, DWORD Wsize)
+void ScaleTo24(HLOCAL *pHBm, DWORD Wsize)
 {
 	DWORD *src, w, h = m_HeaderPtr->biHeight, newsize;
 	BYTE *dest;
-	HANDLE hNewBm;
+	HLOCAL hNewBm;
 
 	src = (DWORD *)*pHBm;
 	dest = (BYTE *)*pHBm;
@@ -1425,7 +1430,7 @@ void ScaleTo24(HANDLE *pHBm, DWORD Wsize)
 	}
 }
 
-int CopyPixels(HANDLE *pHBm)
+int CopyPixels(HLOCAL *pHBm)
 {
 	DWORD Wsize;
 
@@ -1492,7 +1497,6 @@ void Release(void)
 	if ( m_InitResult == CO_E_NOTINITIALIZED ) CoUninitialize();
 }
 
-#if ENABLE_INFOTEXT
 char *PropvToStr(PROPVARIANT &v, char *dest)
 {
 	switch (v.vt){
@@ -1585,14 +1589,14 @@ char *PropvToStr(PROPVARIANT &v, char *dest)
 	return dest;
 }
 
+/*
 struct PropIDnames {
 	WCHAR *id;
 	char *name;
 } ;
 
 
-PropIDnames App1[] =
-{
+PropIDnames App1[] = {
 	{ L"{ushort=0}", "app1/NULL"},
 	{ L"{ushort=271}", "maker"},
 	{ L"{ushort=272}", "model"},
@@ -1606,6 +1610,7 @@ PropIDnames App1[] =
 	{ L"{ushort=33434}", "露出"},
 	{ NULL, NULL }
 };
+*/
 
 char *EnumProps(IWICMetadataQueryReader *metadata, char *dest)
 {
@@ -1735,7 +1740,6 @@ void GetInfoText(char *text, size_t len)
 	}
 	*dest = '\0';
 }
-#endif // ENABLE_INFOTEXT
 
 void SetResult(SUSIE_DECODE_PARAMETERS *params)
 {
@@ -1839,15 +1843,11 @@ void SwapXY(void)
 /*-----------------------------------------------------------------------------
 	dll の初期化／終了処理
 -----------------------------------------------------------------------------*/
-#ifdef __BORLANDC__
- BOOL WINAPI DllEntryPoint(HINSTANCE hInstance, unsigned long reason, void *)
-#else
- BOOL WINAPI DllMain(HINSTANCE hInstance, unsigned long reason, void *)
-#endif
+BOOL WINAPI DllMain(HINSTANCE hInst, unsigned long reason, void *)
 {
 	// DLL の終了処理 -----------------------------------------------------
 	if ( reason == DLL_PROCESS_ATTACH ){
-		DLLhInst = hInstance;
+		DLLhInst = hInst;
 	}else if ( (reason == DLL_PROCESS_DETACH) && (codecs.list != NULL) ){
 		// CODECSSTRUCT で使ったメモリを解放する
 		CODECLISTITEMSTRUCT *codeclistp = codecs.list;
@@ -2094,7 +2094,7 @@ extern "C" int __stdcall GetPictureInfoW(LPCWSTR buf, LONG_PTR len, unsigned int
 	}
 
 	for (;;){
-		HANDLE pHBInfo;
+		HLOCAL pHBInfo;
 
 		result = wic.InitDecoder(&params);
 		if ( result != SUSIEERROR_NOERROR ) break;
@@ -2110,17 +2110,21 @@ extern "C" int __stdcall GetPictureInfoW(LPCWSTR buf, LONG_PTR len, unsigned int
 		lpInfo->x_density = static_cast<WORD>(static_cast<BITMAPINFOHEADER *>(pHBInfo)->biXPelsPerMeter / 39);
 		lpInfo->y_density = static_cast<WORD>(static_cast<BITMAPINFOHEADER *>(pHBInfo)->biYPelsPerMeter / 39);
 		lpInfo->colorDepth = static_cast<BITMAPINFOHEADER *>(pHBInfo)->biBitCount;
-#if ENABLE_INFOTEXT
-		lpInfo->hInfo = LocalAlloc(LMEM_FIXED, 0x4000);
-		if ( lpInfo->hInfo != NULL ){
-			char *dest = (char *)lpInfo->hInfo;
+		if ( X_InfoText ){
+			lpInfo->hInfo = LocalAlloc(LMEM_FIXED, 0x4000);
+			if ( lpInfo->hInfo != NULL ){
+				char *dest = (char *)lpInfo->hInfo;
 
-			*dest = '\0';
-			wic.GetInfoText(dest, 0x4000 - 1);
+				*dest = '\0';
+				wic.GetInfoText(dest, 0x4000 - 1);
+				if ( *dest == '\0' ){
+					LocalFree(lpInfo->hInfo);
+					lpInfo->hInfo = NULL;
+				}
+			}
+		}else{
+			lpInfo->hInfo = NULL;
 		}
-#else
-		lpInfo->hInfo = NULL;
-#endif
 		LocalFree(pHBInfo);
 		break;
 	}
@@ -2177,7 +2181,7 @@ extern "C" int __stdcall DecodePictureW(SUSIE_DECODE_PARAMETERS *params)
 	return result;
 }
 
-extern "C" int __stdcall GetPictureW(LPCWSTR buf, LONG_PTR len, unsigned int flag, HANDLE *pHBInfo, HANDLE *pHBm, SUSIE_PROGRESS progressCallback, LONG_PTR lData)
+extern "C" int __stdcall GetPictureW(LPCWSTR buf, LONG_PTR len, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, SUSIE_PROGRESS progressCallback, LONG_PTR lData)
 {
 	int result;
 	WIC_Susie_class wic;
@@ -2209,7 +2213,7 @@ extern "C" int __stdcall GetPictureW(LPCWSTR buf, LONG_PTR len, unsigned int fla
 	return result;
 }
 
-extern "C" int __stdcall GetPicture(LPCSTR buf, LONG_PTR len, unsigned int flag, HANDLE *pHBInfo, HANDLE *pHBm, SUSIE_PROGRESS progressCallback, LONG_PTR lData)
+extern "C" int __stdcall GetPicture(LPCSTR buf, LONG_PTR len, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, SUSIE_PROGRESS progressCallback, LONG_PTR lData)
 {
 	if ( (flag & SUSIE_SOURCE_MASK) == SUSIE_SOURCE_DISK ){ // ファイル名指定
 		WCHAR filenameW[MAX_PATH];
@@ -2223,7 +2227,7 @@ extern "C" int __stdcall GetPicture(LPCSTR buf, LONG_PTR len, unsigned int flag,
 	}
 }
 //-----------------------------------------------------------------------------
-extern "C" int __stdcall GetPreviewW(LPCWSTR buf, LONG_PTR len, unsigned int flag, HANDLE *pHBInfo, HANDLE *pHBm, SUSIE_PROGRESS progressCallback, LONG_PTR lData)
+extern "C" int __stdcall GetPreviewW(LPCWSTR buf, LONG_PTR len, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, SUSIE_PROGRESS progressCallback, LONG_PTR lData)
 {
 	int result;
 	WIC_Susie_class wic;
@@ -2261,7 +2265,7 @@ extern "C" int __stdcall GetPreviewW(LPCWSTR buf, LONG_PTR len, unsigned int fla
 	return result;
 }
 
-extern "C" int __stdcall GetPreview(LPCSTR buf, LONG_PTR len, unsigned int flag, HANDLE *pHBInfo, HANDLE *pHBm, SUSIE_PROGRESS progressCallback, LONG_PTR lData)
+extern "C" int __stdcall GetPreview(LPCSTR buf, LONG_PTR len, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, SUSIE_PROGRESS progressCallback, LONG_PTR lData)
 {
 	if ( (flag & SUSIE_SOURCE_MASK) == SUSIE_SOURCE_DISK ){ // ファイル名指定
 		WCHAR filenameW[MAX_PATH];
@@ -2432,7 +2436,7 @@ extern "C" int __stdcall ConfigurationDlg(HWND hWnd, int function)
 	return 0;
 }
 
-extern "C" int __stdcall CreatePictureW(LPCWSTR filepath, unsigned int flag, HANDLE *pHBInfo, HANDLE *pHBm, struct PictureInfo *, SUSIE_PROGRESS progressCallback, LONG_PTR lData)
+extern "C" int __stdcall CreatePictureW(LPCWSTR filepath, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, struct PictureInfo *, SUSIE_PROGRESS progressCallback, LONG_PTR lData)
 {
 	HRESULT InitResult;
 	int result = SUSIEERROR_NOERROR;
@@ -2657,7 +2661,7 @@ extern "C" int __stdcall CreatePictureW(LPCWSTR filepath, unsigned int flag, HAN
 	return result;
 }
 
-extern "C" int __stdcall CreatePicture(LPCSTR filepath, unsigned int flag, HANDLE *pHBInfo, HANDLE *pHBm, struct PictureInfo *lpInfo, SUSIE_PROGRESS progressCallback, LONG_PTR lData)
+extern "C" int __stdcall CreatePicture(LPCSTR filepath, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, struct PictureInfo *lpInfo, SUSIE_PROGRESS progressCallback, LONG_PTR lData)
 {
 	WCHAR filenameW[MAX_PATH];
 

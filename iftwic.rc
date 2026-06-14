@@ -83,6 +83,8 @@ IDS_COLUMN3J "バージョン"
 IDS_COLUMN4J "作成者"
 }
 //-------------------------------------------------------------- バージョン情報
+#ifndef WINDRES
+#ifndef WINEGCC
 1 VERSIONINFO LOADONCALL MOVEABLE
 FILEVERSION		VERSION
 PRODUCTVERSION	VERSION
@@ -107,3 +109,5 @@ BEGIN
 	VALUE "Translation", 0x0411, 932  // Japanese	| Shift-JIS X-0208
   END
 END
+#endif
+#endif

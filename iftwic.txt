@@ -111,117 +111,12 @@
 
 ●64bit版 Susie Plug-in の仕様について
 
-	64bit版の正式な仕様がないため、次のような仕様にしています。
-	また、拡張子は .sph としています。
+	64bit版の正式な仕様がないため独自仕様にしています。
+	また、拡張子は .sph としています。詳細は添付の susie.h か、
+	次の場所を参照してください。
 
-	ファイルサイズと時刻に関わる部分と、コールバックの追加引数を
-	64bit化した以外はそのままになっています。
-
-//-------------------------------------- DLL 定数
-#define SUSIEERROR_NOERROR       0
-#define SUSIEERROR_NOTSUPPORT   -1
-#define SUSIEERROR_USERCANCEL    1
-#define SUSIEERROR_UNKNOWNFORMAT 2
-#define SUSIEERROR_BROKENDATA    3
-#define SUSIEERROR_EMPTYMEMORY   4
-#define SUSIEERROR_FAULTMEMORY   5
-#define SUSIEERROR_FAULTREAD     6
-#define SUSIEERROR_RESERVED      7
-#define SUSIEERROR_INTERNAL      8
-
-typedef ULONG_PTR susie_time_t;
-//-------------------------------------- DLL 構造体
-#pragma pack(push, 1)
-typedef struct PictureInfo{
-    long    left, top;	// 画像を展開する位置
-    long    width;	// 画像の幅(pixel)
-    long    height;	// 画像の高さ(pixel)
-    WORD    x_density;	// 画素の水平方向密度
-    WORD    y_density;	// 画素の垂直方向密度
-    short   colorDepth;	// １画素当たりのbit数
-    #ifdef _WIN64
-      char  dummy[2]; // アラインメント
-    #endif
-    HLOCAL  hInfo;	// 画像内のテキスト情報
-} SUSIE_PICTUREINFO;
-
-typedef struct {
-    unsigned char  method[8];	// 圧縮法の種類
-    ULONG_PTR      position;	// ファイル上での位置
-    ULONG_PTR      compsize;	// 圧縮されたサイズ
-    ULONG_PTR      filesize;	// 元のファイルサイズ
-    susie_time_t   timestamp;	// ファイルの更新日時
-    char           path[200];	// 相対パス
-    char           filename[200];	// ファイル名
-    unsigned long  crc;	// CRC
-    #ifdef _WIN64
-       // 64bit版の構造体サイズは444bytesですが、実際のサイズは
-       // アラインメントにより448bytesになります。環境によりdummyが必要です。
-       char        dummy[4];
-    #endif
-} SUSIE_FINFO;
-
-typedef struct {
-    unsigned char  method[8];	// 圧縮法の種類
-    ULONG_PTR      position;	// ファイル上での位置
-    ULONG_PTR      compsize;	// 圧縮されたサイズ
-    ULONG_PTR      filesize;	// 元のファイルサイズ
-    susie_time_t   timestamp;	// ファイルの更新日時
-    WCHAR          path[200];	// 相対パス
-    WCHAR          filename[200];	// ファイルネーム
-    unsigned long  crc;		// CRC
-    #ifdef _WIN64
-       // 64bit版の構造体サイズは844bytesですが、実際のサイズは
-       // アラインメントにより848bytesになります。環境によりdummyが必要です。
-       char        dummy[4];
-    #endif
-} SUSIE_FINFOW;
-#pragma pack(pop)
-
-// コールバック
-typedef int (__stdcall *SUSIE_PROGRESS)(int nNum, int nDenom, LONG_PTR lData);
-
-//-------------------------------------- DLL 関数(UNICODE版(～W)もあります)
-int __stdcall GetPluginInfo(int infono, LPSTR buf, int buflen);
-int __stdcall GetPluginInfoW(int infono, LPWSTR buf, int buflen);
-int __stdcall IsSupported(LPCSTR filename, void *dw);
-int __stdcall IsSupportedW(LPCWSTR filename, void *dw);
-int __stdcall ConfigurationDlg(HWND hWnd, int function);
-int __stdcall GetPictureInfo(LPCSTR buf, LONG_PTR len, unsigned int flag, struct PictureInfo *lpInfo);
-int __stdcall GetPictureInfoW(LPCWSTR buf, LONG_PTR len, unsigned int flag, struct PictureInfo *lpInfo);
-int __stdcall GetPicture(LPCSTR buf, LONG_PTR len, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, SUSIE_PROGRESS lpPrgressCallback, LONG_PTR lData);
-int __stdcall GetPictureW(LPCWSTR buf, LONG_PTR len, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, SUSIE_PROGRESS lpPrgressCallback, LONG_PTR lData);
-int __stdcall GetPreview(LPCSTR buf, LONG_PTR len, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, SUSIE_PROGRESS lpPrgressCallback, LONG_PTR lData);
-int __stdcall GetPreviewW(LPCWSTR buf, LONG_PTR len, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, SUSIE_PROGRESS lpPrgressCallback, LONG_PTR lData);
-int __stdcall GetArchiveInfo(LPCSTR buf, LONG_PTR len, unsigned int flag, HLOCAL *lphInf);
-int __stdcall GetArchiveInfoW(LPCWSTR buf, LONG_PTR len, unsigned int flag, HLOCAL *lphInf);
-int __stdcall GetFile(LPCSTR src, LONG_PTR len, LPSTR dest, unsigned int flag, SUSIE_PROGRESS prgressCallback, LONG_PTR lData);
-int __stdcall GetFileW(LPCWSTR src, LONG_PTR len, LPWSTR dest, unsigned int flag, SUSIE_PROGRESS prgressCallback, LONG_PTR lData);
-int __stdcall GetFileInfo(LPCSTR buf, LONG_PTR len, LPCSTR filename, unsigned int flag, SUSIE_FINFO *lpInfo);
-int __stdcall GetFileInfoW(LPCWSTR buf, LONG_PTR len, LPCWSTR filename, unsigned int flag, SUSIE_FINFOW *lpInfo);
-int __stdcall CreatePicture(LPCSTR filepath, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, struct PictureInfo *lpInfo, SUSIE_PROGRESS progressCallback, LONG_PTR lData); // filepath の拡張子で保存形式を決定
-int __stdcall CreatePictureW(LPCWSTR filepath, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, struct PictureInfo *lpInfo, SUSIE_PROGRESS progressCallback, LONG_PTR lData); // filepath の拡張子で保存形式を決定
-
-// DLL 動的読み込み用
-typedef int (__stdcall *GETPLUGININFO)(int infono, LPSTR buf, int buflen);
-typedef int (__stdcall *GETPLUGININFOW)(int infono, LPWSTR buf, int buflen);
-typedef int (__stdcall *ISSUPPORTED)(LPCSTR filename, void *dw);
-typedef int (__stdcall *ISSUPPORTEDW)(LPCWSTR filename, void *dw);
-typedef int (__stdcall *CONFIGURATIONDLG)(HWND hWnd, int function);
-typedef int (__stdcall *GETPICTUREINFO)(LPCSTR buf, LONG_PTR len, unsigned int flag, struct PictureInfo *lpInfo);
-typedef int (__stdcall *GETPICTUREINFOW)(LPCWSTR buf, LONG_PTR len, unsigned int flag, struct PictureInfo *lpInfo);
-typedef int (__stdcall *GETPICTURE)(LPCSTR buf, LONG_PTR len, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, SUSIE_PROGRESS lpPrgressCallback, LONG_PTR lData);
-typedef int (__stdcall *GETPICTUREW)(LPCWSTR buf, LONG_PTR len, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, SUSIE_PROGRESS lpPrgressCallback, LONG_PTR lData);
-typedef int (__stdcall *GETPREVIEW)(LPCSTR buf, LONG_PTR len, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, SUSIE_PROGRESS lpPrgressCallback, LONG_PTR lData);
-typedef int (__stdcall *GETPREVIEWW)(LPCWSTR buf, LONG_PTR len, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, SUSIE_PROGRESS lpPrgressCallback, LONG_PTR lData);
-typedef int (__stdcall *GETARCHIVEINFO)(LPCSTR buf, LONG_PTR len, unsigned int flag, HLOCAL *lphInf);
-typedef int (__stdcall *GETARCHIVEINFOW)(LPCWSTR buf, LONG_PTR len, unsigned int flag, HLOCAL *lphInf);
-typedef int (__stdcall *GETFILE)(LPCSTR src, LONG_PTR len, LPSTR dest, unsigned int flag, SUSIE_PROGRESS prgressCallback, LONG_PTR lData);
-typedef int (__stdcall *GETFILEW)(LPCWSTR src, LONG_PTR len, LPWSTR dest, unsigned int flag, FARPROC prgressCallback, LONG_PTR lData);
-typedef int (__stdcall *GETFILEINFO)(LPCSTR buf, LONG_PTR len, LPCSTR filename, unsigned int flag, SUSIE_FINFO *lpInfo);
-typedef int (__stdcall *GETFILEINFOW)(LPCWSTR buf, LONG_PTR len, LPCWSTR filename, unsigned int flag, SUSIE_FINFOW *lpInfo);
-typedef int (__stdcall *CREATEPICTURE)(LPCSTR filepath, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, void *lpInfo, void *progressCallback, LONG_PTR lData);
-typedef int (__stdcall *CREATEPICTUREW)(LPCWSTR filepath, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, void *lpInfo, void *progressCallback, LONG_PTR lData);
+	https://toro.d.dooo.jp/dlsphapi.html
+	https://toroidj.github.io/dlsphapi.html
 
 
 ●最後に
@@ -235,8 +130,8 @@ typedef int (__stdcall *CREATEPICTUREW)(LPCWSTR filepath, unsigned int flag, HLO
 	・転載は自由に行えます。
 	  本ソフトウェアが主となる営利目的での配布・使用はこちらに連絡下さい。
 
-	・Visual Studio 2008 で構築しています。
-	  ARM64版は、Visual Studio 2019 を用いて構築しています。
+	・x86 版と x64 版は、Visual Studio 2008 で構築しています。
+	  ARM64 版は、Visual Studio 2022 を用いて構築しています。
 
 	・ソースを添付しています。個人で使用する範囲であれば自由に改変す
 	  ることができます。尚、プロジェクトファイルを添付していますが、
@@ -310,4 +205,4 @@ Version 0.1	2013/03/30
 ●連絡先／一次配布先						TORO／高橋 良和
 
 E-mail	toroid.jp@gmail.com
-WWW	http://toro.d.dooo.jp/index.html
+WWW	https://toro.d.dooo.jp/	https://toroidj.github.io/

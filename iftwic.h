@@ -8,7 +8,6 @@
 #define VERSION		2, 2, 0
 #define VERSIONS	"2.2"
 #define Copyright	"Copyright (c)2013-2024 TORO"
-#define ENABLE_INFOTEXT 0
 
 #define IDD_CONFIGE	10600
 #define IDD_CONFIG	10601
