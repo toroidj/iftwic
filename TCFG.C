@@ -8,12 +8,57 @@
 #include "TCFG.H"
 
 //======================================================================== 雑用
+// sizeptr 分だけ確実に読み込む ReadFile
+BOOL SizedReadFile(HANDLE hFile, void *buffer, DWORD size, DWORD *sizeptr)
+{
+	DWORD readsize, totalsize = 0;
+
+	for(;;){
+		if ( ReadFile(hFile, buffer, size, &readsize, NULL) ){
+			totalsize += readsize;
+			if ( size <= readsize ) break;
+			if ( readsize != 0 ){
+				size -= readsize;
+				(char *)buffer += readsize;
+				continue;
+			}
+			// EOF 到着。*sizeptr 以上読み込んでいたら正常終了
+			if ( (sizeptr != NULL) && (*sizeptr <= totalsize ) ) break;
+			SetLastError(ERROR_READ_FAULT);
+		}
+		if ( sizeptr != NULL ) *sizeptr = totalsize;
+		return FALSE;
+	}
+	if ( sizeptr != NULL ) *sizeptr = totalsize;
+	return TRUE;
+}
+
+// size 分だけ確実に書き込む WriteFile
+BOOL SizedWriteFile(HANDLE hFile, void *buffer, DWORD size)
+{
+	DWORD writesize;
+
+	for(;;){
+		if ( WriteFile(hFile, buffer, size, &writesize, NULL) ){
+			if ( size <= writesize ) return TRUE;
+			if ( writesize != 0 ){
+				size -= writesize;
+				(char *)buffer += writesize;
+				continue;
+			}
+			// 書き込みできなくなった
+			SetLastError(ERROR_WRITE_FAULT);
+		}
+		return FALSE;
+	}
+}
+
 /*-------------------------------------
 	行末(\0,\a,\d)か？
 
 RET:	==0 :EOL	!=0 :Code
 --------------------------------------*/
-BYTE USEFASTCALL IsEOLA(char **str)
+BYTE USEFASTCALL IsEOLA(const char **str)
 {
 	BYTE code;
 
@@ -29,56 +74,24 @@ BYTE USEFASTCALL IsEOLA(char **str)
 	}
 	return code;
 }
-#ifdef UNICODE
-WCHAR USEFASTCALL IsEOLW(TCHAR **str)
-{
-	WCHAR code;
 
-	code = **str;
-	if ( code == '\0' ) return '\0';
-	if ( code == 0xd ){
-		if ( *(*str + 1) == 0x0a ) (*str)++;
-		return '\0';
-	}
-	if ( code == 0xa ){
-		if ( *(*str + 1) == 0x0d ) (*str)++;
-		return '\0';
-	}
-	return code;
-}
-#define IsEOL IsEOLW
-#else
-#define IsEOL IsEOLA
-#endif
 /*-------------------------------------
 	空白(space, tab）をスキップする
 
 RET:	==0 :EOL	!=0 :Code
 --------------------------------------*/
-BYTE USEFASTCALL SkipSpaceA(char **str)
+BYTE USEFASTCALL SkipSpaceA(const char **str)
 {
 	BYTE code;
 
-	while(1){
+	for(;;){
 		code = IsEOLA(str);
 		if ( (code != ' ') && (code != '\t') ) break;
 		(*str)++;
 	}
 	return code;
 }
-#ifdef UNICODE
-WORD USEFASTCALL SkipSpaceW(TCHAR **str)
-{
-	WORD code;
 
-	while(1){
-		code = IsEOLW(str);
-		if ( (code != ' ') && (code != '\t') ) break;
-		(*str)++;
-	}
-	return code;
-}
-#endif
 //------------------------------------- 行末空白を除去(b:先頭, p:末尾)
 void USEFASTCALL SkipSpaceB(char *b, char *p)
 {
@@ -91,69 +104,44 @@ void USEFASTCALL SkipSpaceB(char *b, char *p)
 	}
 	*(p+1) = '\0';
 }
-/*-----------------------------------------------------------------------------
-	一つ分のパラメータを抽出する。先頭と末尾の空白は除去する
-
-RET:	先頭の文字(何もなかったら 0)
------------------------------------------------------------------------------*/
-BYTE GetLineParam(TCHAR **str, TCHAR *param)
-{
-	UTCHAR code, bottom;
-	TCHAR *src, *dst;
-
-	src = *str;
-	dst = param;
-	bottom = SkipSpace(&src);
-	if (!bottom){
-		*str = src;
-		return '\0';
-	}
-	src++;
-	if (bottom == '\"'){
-		bottom = *src;
-		while( '\0' != (code = IsEOL(&src)) ){
-			src++;
-			if ( (code == '\"') && (*src <= ' ') )	break;
-			*dst++ = code;
-		}
-	}else{
-		*dst++ = bottom;
-		while( '\0' != (code = IsEOL(&src)) ){
-			src++;
-			if (code <= ' ')	break;
-			*dst++ = code;
-		}
-	}
-	*dst = '\0';
-	*str = src;
-	return bottom;
-}
 //============================================================ 定義ファイル操作
 //------------------------------------- 定義ファイルを読み込む
 BOOL CFGOpen(CFG *cfg, WCHAR *filename)
 {
 	HANDLE hFile;
+	BOOL result = TRUE;
 
 	cfg->bottom = NULL;
 	cfg->size = 0;
-	cfg->write = 0;
+//	cfg->write = 0;
 //	tstrcpy(cfg->filename, filename);
 
 	hFile = CreateFileW(filename, GENERIC_READ, FILE_SHARE_READ, NULL,
 			OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 	if ( hFile == INVALID_HANDLE_VALUE ) return FALSE;
 	cfg->size = GetFileSize(hFile, NULL);
-	cfg->bottom = (char *)HeapAlloc(GetProcessHeap(), 0, cfg->size + 256);
-	ReadFile(hFile, cfg->bottom, cfg->size, &cfg->size, NULL);
+	if ( cfg->size < (0x7fffffff - CFG_MARGIN) ){ // エラー若しくは大きすぎの場合はエラー(cfg->bottom = NULL)
+		cfg->bottom = (char *)HeapAlloc(GetProcessHeap(), 0, cfg->size + CFG_MARGIN);
+	}
+	if ( cfg->bottom == NULL ){
+		CloseHandle(hFile);
+		return FALSE;
+	}
+	result = SizedReadFile(hFile, cfg->bottom, cfg->size, &cfg->size);
 	CloseHandle(hFile);
-
-	memset(cfg->bottom + cfg->size, 0, 256);
-	return TRUE;
+	if ( result ){
+		memset(cfg->bottom + cfg->size, 0, CFG_MARGIN);
+	}else{
+		CFGClose(cfg);
+	}
+	return result;
 }
 //------------------------------------- 定義ファイルを閉じる
 BOOL CFGClose(CFG *cfg)
 {
+	if ( (cfg == NULL) || (cfg->bottom == NULL) ) return FALSE;
 	HeapFree(GetProcessHeap(), 0, cfg->bottom);
+	cfg->bottom = NULL;
 	return TRUE;
 }
 /*-------------------------------------
@@ -161,10 +149,11 @@ BOOL CFGClose(CFG *cfg)
 	string に書き込む。
 	offset には次の行の先頭を書く
 -------------------------------------*/
-BOOL USEFASTCALL CFGGetLine(CFG *cfg, DWORD *offset, char *string)
+BOOL USEFASTCALL CFGGetLine(CFG *cfg, DWORD *offset, char *string, DWORD maxlength)
 {
-	char *bottom, *p, *end = NULL;
+	const char *bottom, *p, *end = NULL, *strmax;
 
+	if ( cfg->bottom == NULL ) return FALSE;
 	bottom = cfg->bottom + *offset;
 	if ( *bottom == '\0' ) return FALSE;
 											// 先頭の空白を削除 ---------------
@@ -173,9 +162,13 @@ BOOL USEFASTCALL CFGGetLine(CFG *cfg, DWORD *offset, char *string)
 											// 行末&コメントの検索 ------------
 	for ( ; *p != '\0' ; p++ ){
 #if 0
-		if ( (*p == ';') && !end ){				// コメント
-			end = p;
-			continue;
+		if ( *p == ';' ){
+			if ( (*(p + 1) != ';') && (end == NULL) ){ // コメント
+				end = p;
+				continue;
+			}else{
+				p++;
+			}
 		}
 #endif
 		if ( (*p == '\r') || (*p == '\n') ){	// CR/LF
@@ -190,9 +183,12 @@ BOOL USEFASTCALL CFGGetLine(CFG *cfg, DWORD *offset, char *string)
 											// 行末の空白を削除 ---------------
 	while ( (end > bottom) && (*(end - 1) == ' ') ) end--;
 											// 複写 & TAB 除去 ----------------
+	strmax = string + maxlength - 1;
 	for ( ; bottom < end ; bottom++ ){
 		if ( *bottom == '\t' ) continue;
+//		if ( *bottom == ';' ) bottom++;
 		*string++ = *bottom;
+		if ( string >= strmax ) break;
 	}
 	*string = '\0';
 	return TRUE;
@@ -200,16 +196,18 @@ BOOL USEFASTCALL CFGGetLine(CFG *cfg, DWORD *offset, char *string)
 //------------------------------------- パラメータを抽出する
 char *CFGFixParam(char *string, char **next)
 {
-	char *ptr, *q;
+	char *ptr, *lastptr;
 
-	SkipSpaceA(&string);
+	SkipSpaceA((const TCHAR **)&string);
+							// 項目区切りを検索
 	ptr = string;
 	while ( *ptr && (*ptr != ',') ) ptr++;
-	q = ptr;
-	if ( *ptr == ',' ) ptr++;
-	while ( (q > string) && (*(q - 1) == ' ') ) q--;
-	*q = '\0';
+	lastptr = ptr;
+	if ( *ptr == ',' ) ptr++;	// 次の項目の頭出し
+							// 末尾の空白を除去
+	while ( (lastptr > string) && (*(lastptr - 1) == ' ') ) lastptr--;
+	*lastptr = '\0';
 
-	if ( next ) *next = ptr;
+	if ( next != NULL ) *next = ptr;
 	return string;
 }

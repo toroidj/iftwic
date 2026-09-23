@@ -3,11 +3,13 @@
 -----------------------------------------------------------------------------*/
 #define APPNAME "iftwic"
 
+#define NO_ERROR_MESSAGEBOX 0	// WIC が見つからないメッセージを表示しない
+
 #define CFG_COMPANY	"TOROID"	// AppData の直下に使用する名前
 #define CFG_APPNAME	APPNAME		// CFG_COMPANY の下に使用する名前
-#define VERSION		2, 2, 0
-#define VERSIONS	"2.2"
-#define Copyright	"Copyright (c)2013-2024 TORO"
+#define VERSION		2, 2, 1
+#define VERSIONS	"2.21"
+#define Copyright	"Copyright (c)2013-2026 TORO"
 
 #define IDD_CONFIGE	10600
 #define IDD_CONFIG	10601

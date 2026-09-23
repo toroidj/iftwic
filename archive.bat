@@ -3,9 +3,12 @@ set RETAIL=1
 rem *** set value ***
 set arcname=iftwic22.zip
 set readme=iftwic.txt
+set vername=iftwic.h
 set srcname=iftwics.7z
 
 rem *** main ***
+call vertime %arcname% %readme% %vername%
+
 md "for View" 2> nul
 del /q *.7z 2> NUL
 del /q *.zip 2> NUL
