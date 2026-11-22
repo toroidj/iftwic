@@ -167,7 +167,7 @@ LPDLGTEMPLATE GetDialogTemplate(HMODULE hinst, LPCTSTR lpszTemplate)
 			dp += sizeof(WORD) * 2;
 		} else { // UCS-2 - z
 			dp += sizeof(WORD);
-			while ( *dp != 0 ) dp += sizeof(WORD);
+			while ( *(WORD *)dp != 0 ) dp += sizeof(WORD);
 			dp += sizeof(WORD);
 		}
 	}
@@ -175,7 +175,7 @@ LPDLGTEMPLATE GetDialogTemplate(HMODULE hinst, LPCTSTR lpszTemplate)
 									// 規定のフォントがあれば飛ばす
 	if ( ((DLGTEMPLATE *)dialog)->style & DS_SETFONT ){
 		dpitem += sizeof(WORD); // font point
-		while ( *dpitem != '\0' ) dpitem += sizeof(WORD);
+		while ( *(WORD *)dpitem != '\0' ) dpitem += sizeof(WORD);
 		dpitem += sizeof(WORD); // NIL
 	}
 								// dword 補正1
@@ -234,6 +234,7 @@ void USEFASTCALL MakeCfgFilename(WCHAR *filename, int WriteMode)
 	WCHAR *orgptr = NULL;
 	WCHAR appdataname[MAX_PATH];
 									// 取りあえずオリジナルファイル名を作成
+	orgname[0] = '\0';
 	if ( GetModuleFileNameW(DLLhInst, orgname, MAX_PATH) != 0 ){
 		orgptr = wcsrchr(orgname, '.');
 		if ( orgptr == NULL ) orgptr = orgname + wcslen(orgname);
@@ -242,7 +243,7 @@ void USEFASTCALL MakeCfgFilename(WCHAR *filename, int WriteMode)
 		if ( orgptr == NULL ) orgptr = orgname;
 		if ( wcslen(orgptr) > 90 ) orgptr = NULL;
 	}
-	if ( orgptr == NULL ) orgptr = UNICODESTR(APPNAME) L".cfg";
+	if ( orgptr == NULL ) orgptr = L"\\" UNICODESTR(APPNAME) L".cfg";
 									// AppData があればそれを使う
 	appdataname[0] = '\0';
 	ExpandEnvironmentStringsW(L"%APPDATA%", appdataname, MAX_PATH - 100);
@@ -274,7 +275,7 @@ void USEFASTCALL MakeCfgFilename(WCHAR *filename, int WriteMode)
 			if ( appdataname[0] != '\0' ){ // %APPDATA% 内のファイルを削除
 				DeleteFileW(appdataname);
 				*wcsrchr(appdataname, '\\') = '\0';
-				RemoveDirectoryW(appdataname);
+				RemoveDirectoryW(appdataname); // toroid dir を削除
 			}
 		}
 	}
@@ -294,6 +295,11 @@ void SetDefaultFlags(void)
 		}
 	}
 }
+
+#define CodecIs_Enable 0x2000
+#define CodecIs_Disable 0x1000
+#define CodecIs_Check(hDlg, IDV, index) ((((UINT)SendDlgItemMessageW((hDlg), (IDV), LVM_GETITEMSTATE, (WPARAM)(index), LVIS_STATEIMAGEMASK)) >> 12) - 1)
+
 
 void DumpConfig(HWND hDlg, int WriteMode)
 {
@@ -333,9 +339,10 @@ void DumpConfig(HWND hDlg, int WriteMode)
 		CODECLISTITEMSTRUCT *codeclistp = codecs.list;
 		int leftcodecs = codecs.count, index = 0;
 
+		// コーデックの有効状態がデフォルトと同じかどうかをチェックする
 		while ( index < codecs.count ){
 			// VM_GETITEMSTATE が エラーのときは、チェック有り扱い
-			codeclistp->enable = (((UINT)SendDlgItemMessageW(hDlg, IDV_CODECS, LVM_GETITEMSTATE, (WPARAM)index, LVIS_STATEIMAGEMASK)) >> 12) - 1;
+			codeclistp->enable = CodecIs_Check(hDlg, IDV_CODECS, index);
 
 			if ( wcscmp(codeclistp->ext + 1, L"bmp") == 0 ){
 				if ( codeclistp->enable ) break;
@@ -345,16 +352,17 @@ void DumpConfig(HWND hDlg, int WriteMode)
 			codeclistp++;
 			index++;
 		}
-		if ( index == codecs.count ){ // デフォルトと同じ
+		if ( index == codecs.count ){ // 全てデフォルトと同じ
 			size += wsprintfA(buf + size, "Disables\t= %s\r\n", DefaultDisableTypes);
 			SizedWriteFile(hFile, buf, size); // 失敗しても保存可能なところは保存
-		}else{
+		}else{ // デフォルトと異なるため、個別に設定を保存
 			SizedWriteFile(hFile, buf, size); // 失敗しても保存可能なところは保存
 			codeclistp = codecs.list;
-			leftcodecs = codecs.count, index = 0;
+			leftcodecs = codecs.count;
+			index = 0;
 
 			while ( leftcodecs-- ){
-				codeclistp->enable = (((UINT)SendDlgItemMessageW(hDlg, IDV_CODECS, LVM_GETITEMSTATE, (WPARAM)index, LVIS_STATEIMAGEMASK)) >> 12) - 1;
+				codeclistp->enable = CodecIs_Check(hDlg, IDV_CODECS, index);
 				if ( codeclistp->enable == FALSE ){
 					LPOLESTR cidstr;
 
@@ -376,8 +384,7 @@ void SetDisables(char *extlist)
 {
 	WCHAR bufw[TEXTLINESIZE], *extp, *nextextp;
 
-	AnsiToUnicode(extlist, bufw, TEXTLINESIZE);
-
+	if ( AnsiToUnicode(extlist, bufw, TEXTLINESIZE) == 0 ) return;
 	extp = bufw;
 	while ( *extp != '\0' ){
 		CODECLISTITEMSTRUCT *codeclistp;
@@ -407,7 +414,7 @@ void SetDisableCodec(char *strcid)
 	CODECLISTITEMSTRUCT *codeclistp;
 	int leftcodecs;
 
-	AnsiToUnicode(strcid, bufW, 128);
+	if ( AnsiToUnicode(strcid, bufW, 128) == 0 ) return;
 	if ( FAILED(CLSIDFromString(bufW, &cid)) ) return;
 
 	codeclistp = codecs.list;
@@ -474,20 +481,12 @@ void LoadCfg(void)
 
 }
 
-void ShowNoWICmessage(void)
-{
-#if NO_ERROR_MESSAGEBOX == 0
-	::MessageBoxW(NULL, L"WIC がありません", NULL, MB_OK);
-#else
-	#pragma message("** NO_ERROR_MESSAGEBOX **")
-#endif
-}
-
+// WIC Plugin を無効化する
+// 無効のときは、ConfigurationDlg の IDV_CODECS の 表示で判断可能
 void DisablePlugin(void)
 {
 	codecs.count = 0;
 	InterlockedExchange(&EnabledSettings, ESV_ENABLED);
-	ShowNoWICmessage();
 }
 
 //	WICのコーデック一覧を取得
@@ -598,15 +597,15 @@ int LoadCodecList(void)
 		codecslist[codecscount] = CurAniCodec;
 		codecs.list = codecslist;
 		codecs.count = codecscount + EXTCODECS;
+
+		if ( X_SaveAppData < SAVE_NONE ) LoadCfg();
 	}else{
 		HeapFree(GetProcessHeap(), 0, codecslist);
 	}
 
-	if ( X_SaveAppData < SAVE_NONE ) LoadCfg();
-
 	if ( InitResult == CO_E_NOTINITIALIZED ) CoUninitialize();
 
-	if ( codecs.count == 0 ){
+	if ( codecs.count <= 0 ){
 		DisablePlugin();
 	}else{
 		InterlockedExchange(&EnabledSettings, ESV_ENABLED);
@@ -649,13 +648,14 @@ void SetCodecInfo(HWND hCodecsListWnd, int codecscount, IWICComponentInfo *wicin
 			ListView_SetItem(hCodecsListWnd, &lvi);
 		}
 	}else{ // cur / ani 用
-		wcscpy(buf, L"Embedded animation cursor");
+		wcscpy(buf, (codecscount == (codecs.count - 1)) ?
+				L"Embedded animation cursor" : L"?");
 		lvi.iSubItem = 1;
 		ListView_SetItem(hCodecsListWnd, &lvi);
 	}
 
 	lvi.stateMask = LVIS_STATEIMAGEMASK;
-	lvi.state = codecs.list[codecscount].enable ? 0x2000 : 0x1000;
+	lvi.state = codecs.list[codecscount].enable ? CodecIs_Enable : CodecIs_Disable;
 	SendMessage(hCodecsListWnd, LVM_SETITEMSTATE, (WPARAM)codecscount, (LPARAM)&lvi);
 }
 
@@ -708,10 +708,12 @@ void ListCodecList(HWND hCodecsListWnd)
 		if ( SUCCEEDED(wicimage->CreateComponentInfo(codecs.list[codecscount].cid, &wicinfo)) ){
 			SetCodecInfo(hCodecsListWnd, codecscount, wicinfo);
 			wicinfo->Release();
+		}else{
+			SetCodecInfo(hCodecsListWnd, codecscount, NULL);
 		}
 	}
 	wicimage->Release();
-	SetCodecInfo(hCodecsListWnd, codecs.count - 1, NULL);
+	SetCodecInfo(hCodecsListWnd, codecs.count - 1, NULL); // .cur .ani
 	if ( InitResult == CO_E_NOTINITIALIZED ) CoUninitialize();
 
 	SendMessage(hCodecsListWnd, LVM_SETCOLUMNWIDTH, 1, LVSCW_AUTOSIZE);
@@ -786,7 +788,7 @@ void FixAnimateicon(BYTE *memptr, const BYTE *orgmem, LONG_PTR len)
 		}else if ( (maxlen >= 0x28) && !memcmp(imgptr, "anih", 4) ){
 			m_frame_count = *(DWORD *)(BYTE *)(imgptr + 0x10); // dwSteps
 			if ( m_frame_count > 1 ){
-				m_frame_rate = *(DWORD *)(BYTE *)(imgptr + 0x24) * 10; // dwDefaultRate
+				m_frame_rate = *(DWORD *)(BYTE *)(imgptr + 0x24) * 16; // dwDefaultRate
 				if ( m_frame_rate == 0 ) m_frame_rate = 20;
 			}
 			if ( frame_no >= m_frame_count ) frame_no = 0;
@@ -795,13 +797,14 @@ void FixAnimateicon(BYTE *memptr, const BYTE *orgmem, LONG_PTR len)
 	}
 }
 
-int InitDecoderIconFile(SUSIE_DECODE_PARAMETERS *params)
+SUSIE_ERROR InitDecoderIconFile(SUSIE_DECODE_PARAMETERS *params)
 {
 	const WCHAR *ext;
 	char *memimage;
 	HANDLE hFile;
 	SUSIE_DECODE_PARAMETERS icon_params;
 	int result;
+	LARGE_INTEGER filesize;
 
 	ext = wcsrchr(params->filename, '.');
 	if ( (ext == NULL) ||
@@ -815,20 +818,21 @@ int InitDecoderIconFile(SUSIE_DECODE_PARAMETERS *params)
 			NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 	if ( hFile == INVALID_HANDLE_VALUE ) return SUSIEERROR_UNKNOWNFORMAT;
 
-	DWORD size = GetFileSize(hFile, NULL);
-	if ( size > 0x7fffffff ){ // エラー若しくは大きすぎの場合はエラー
+	// エラー若しくは大きすぎの場合はエラー
+	if ( (FALSE == GetFileSizeEx(hFile, &filesize)) || (filesize.QuadPart > 0x10000000) ){
 		result = SUSIEERROR_FAULTREAD;
 	}else{
-		memimage = static_cast<char *>(HeapAlloc(GetProcessHeap(), 0, size));
+		memimage = static_cast<char *>(HeapAlloc(GetProcessHeap(), 0, (SIZE_T)filesize.QuadPart));
 		if ( memimage != NULL ){
-			if ( SizedReadFile(hFile, memimage, size, NULL) ){
-				icon_params.struct_size = sizeof(params);
-				icon_params.input_flags = 0;
-				icon_params.page_number = 0;
+			if ( SizedReadFile(hFile, memimage, (DWORD)filesize.QuadPart, NULL) ){
+				memset(&icon_params, 0, sizeof(icon_params));
+				icon_params.struct_size = sizeof(icon_params);
+				icon_params.input_flags = params->input_flags;
+				icon_params.page_number = params->page_number;
 
-				icon_params.filename = NULL;
+//				icon_params.filename = NULL;
 				icon_params.fileimage = memimage;
-				icon_params.image_size = size;
+				icon_params.image_size = (LONG_PTR)filesize.QuadPart;
 
 				result = InitDecoder(&icon_params);
 			}else{
@@ -843,7 +847,7 @@ int InitDecoderIconFile(SUSIE_DECODE_PARAMETERS *params)
 	return result;
 }
 
-int InitDecoder(SUSIE_DECODE_PARAMETERS *params)
+SUSIE_ERROR InitDecoder(SUSIE_DECODE_PARAMETERS *params)
 {
 	PixelConvert = 0;
 	AlphaConvert = 0;
@@ -853,9 +857,10 @@ int InitDecoder(SUSIE_DECODE_PARAMETERS *params)
 	m_bmp = NULL;
 	m_frame = NULL;
 	m_conv = NULL;
-	m_PixelInfo = NULL;
+//	m_PixelInfo = NULL;
 	m_metadata = NULL;
 	m_colortransform = NULL;
+	m_ICCcontext = NULL;
 	m_Thumbnailbmp = NULL;
 	m_flip = NULL;
 	m_scale = NULL;
@@ -873,6 +878,7 @@ int InitDecoder(SUSIE_DECODE_PARAMETERS *params)
 	m_frame_no = params->page_number;
 
 	if ( params->fileimage == NULL ){ // ファイル名のみ
+		if ( params->filename == NULL ) return SUSIEERROR_FAULTREAD;
 		if ( (X_TinyPage > 0) && (m_flags & SUSIE_DECODE_SUSIE) ){
 			DWORD file_id = 0;
 			const WCHAR *ptr = params->filename;
@@ -908,6 +914,10 @@ int InitDecoder(SUSIE_DECODE_PARAMETERS *params)
 		}
 
 		memptr = static_cast<BYTE *>(GlobalLock(hGlobal));
+		if ( memptr == NULL ){
+			GlobalFree(hGlobal);
+			return SUSIEERROR_EMPTYMEMORY;
+		}
 		memcpy(memptr, image, size);
 
 		if ( size > 0x30 ){
@@ -916,7 +926,7 @@ int InitDecoder(SUSIE_DECODE_PARAMETERS *params)
 				FixAnimateicon(memptr, image, size);
 			}
 			if ( !memcmp(memptr, CurHeader, sizeof(CurHeader)) && // .cur を .ico 扱いにする
-				(*(DWORD *)(memptr + 0x12) == (*(WORD *)(memptr + 4) * 0x10 + 6)) ){
+				(*(DWORD *)(memptr + 0x12) == ((DWORD)*(WORD *)(memptr + 4) * 0x10 + 6)) ){
 				*(memptr + 2) = 1;
 			}
 		}
@@ -933,7 +943,7 @@ int InitDecoder(SUSIE_DECODE_PARAMETERS *params)
 	return SUSIEERROR_NOERROR;
 }
 
-int InitSusieDecoder(LPCWSTR buf, LONG_PTR len, unsigned int flag)
+SUSIE_ERROR InitSusieDecoder(LPCWSTR buf, LONG_PTR len, unsigned int flag)
 {
 	SUSIE_DECODE_PARAMETERS params;
 
@@ -954,8 +964,10 @@ int InitSusieDecoder(LPCWSTR buf, LONG_PTR len, unsigned int flag)
 	return InitDecoder(&params);
 }
 
-int GetFrame(void)
+SUSIE_ERROR GetFrame(void)
 {
+	double dpiX, dpiY;
+
 	if ( (X_TinyPage > 0) && (m_flags & SUSIE_DECODE_SUSIE) ){
 		UINT frame_count;
 
@@ -977,6 +989,8 @@ int GetFrame(void)
 			return SUSIEERROR_BROKENDATA;
 		}
 	}
+	// ここでは、BITMAPINFOHEADER の分だけ初期化。
+	// BITMAPV5HEADER の分は、SetBitmapinfoHeader で必要に応じて初期化。
 	memcpy(&m_bmpinfo, &DefaultBmpInfo, sizeof(DefaultBmpInfo));
 	m_bmp = m_frame;
 	m_bmp->GetSize((UINT *)&m_bmpinfo.bV5Width, (UINT *)&m_bmpinfo.bV5Height);
@@ -984,17 +998,15 @@ int GetFrame(void)
 		return SUSIEERROR_BROKENDATA;
 	}
 
-	double dpiX, dpiY;
 	if ( SUCCEEDED(m_frame->GetResolution(&dpiX, &dpiY)) ){
 		m_bmpinfo.bV5XPelsPerMeter = static_cast<LONG>(dpiX * (1 / 0.0254f));
 		m_bmpinfo.bV5YPelsPerMeter = static_cast<LONG>(dpiY * (1 / 0.0254f));
 	}
-
 	m_frame->GetMetadataQueryReader(&m_metadata);
 	return SUSIEERROR_NOERROR;
 }
 
-int GetThumbnail(void)
+SUSIE_ERROR GetThumbnail(void)
 {
 	if ( FAILED(m_decoder->GetThumbnail(&m_Thumbnailbmp)) ){
 		// GetPreview は WDP のみサポートしているらしい
@@ -1011,7 +1023,7 @@ int GetThumbnail(void)
 	memcpy(&m_bmpinfo, &DefaultBmpInfo, sizeof(DefaultBmpInfo));
 	m_bmp = m_Thumbnailbmp;
 	m_bmp->GetSize((UINT *)&m_bmpinfo.bV5Width, (UINT *)&m_bmpinfo.bV5Height);
-	if ( m_bmpinfo.bV5Height && m_bmpinfo.bV5Width ){
+	if ( (m_bmpinfo.bV5Height != 0) && (m_bmpinfo.bV5Width != 0) ){
 		return SUSIEERROR_NOERROR;
 	}
 	return SUSIEERROR_BROKENDATA;
@@ -1089,7 +1101,7 @@ void InitColorContext(void)
 	}
 }
 
-int GetPixelInfo(void)
+SUSIE_ERROR GetPixelInfo(void)
 {
 	// 一行の大きさを計算 & 不明のフォーマットは24bitにする
 	m_bmp->GetPixelFormat(&m_pixelFormat);
@@ -1140,8 +1152,10 @@ int GetPixelInfo(void)
 		 (m_pixelFormat == GUID_WICPixelFormat80bppCMYKAlpha) ){
 		m_bmpinfo.bV5BitCount = 32;
 		int result = SetColorbitsTransform(GUID_WICPixelFormat32bppBGRA, WICBitmapPaletteTypeCustom);
-		AlphaConvert = m_flags & SUSIE_DECODE_REQUEST_MERGE_ALPHA;
-		m_result_flags |= SUSIE_DECODE_ALPHA;
+		if ( m_bmpinfo.bV5BitCount == 32 ){
+			AlphaConvert = m_flags & SUSIE_DECODE_REQUEST_MERGE_ALPHA;
+			m_result_flags |= SUSIE_DECODE_ALPHA;
+		}
 		return result;
 	}
 
@@ -1241,27 +1255,33 @@ int GetPixelInfo(void)
 	return SetColorbitsTransform(GUID_WICPixelFormat24bppBGR, WICBitmapPaletteTypeCustom);
 }
 
-int SetBitmapinfoHeader(HLOCAL *pHBInfo)
+SUSIE_ERROR SetBitmapinfoHeader(HLOCAL *pHBInfo)
 {
-	if ( m_ICCsize == 0 ){
-		*pHBInfo = LocalAlloc(LMEM_FIXED, sizeof(BITMAPINFOHEADER) + (sizeof(RGBQUAD) * m_colors) + m_bits_size );
+	if ( m_ICCsize == 0 ){ // BITMAPINFOHEADER + RGBA mask のみ
+		*pHBInfo = LocalAlloc(LMEM_FIXED,
+			sizeof(BITMAPINFOHEADER) + m_bits_size + (sizeof(RGBQUAD) * m_colors));
 		if ( *pHBInfo == NULL ) return SUSIEERROR_EMPTYMEMORY;
-
 	}else{ // ICC profile 埋め込み
 		UINT ProfileSize;
 
-		*pHBInfo = LocalAlloc(LMEM_FIXED | LMEM_ZEROINIT, sizeof(BITMAPV5HEADER)  + (sizeof(RGBQUAD) * m_colors) + m_ICCsize);
+		*pHBInfo = LocalAlloc(LMEM_FIXED,
+			sizeof(BITMAPV5HEADER) + (sizeof(RGBQUAD) * m_colors) + m_ICCsize);
 		if ( *pHBInfo == NULL ) return SUSIEERROR_EMPTYMEMORY;
 
+		// BITMAPINFOHEADER を BITMAPV5HEADER に変換
 		m_bmpinfo.bV5Size = sizeof(BITMAPV5HEADER);
+		// BITMAPV5HEADER の BITMAPINFOHEADER(+ m_bits_size) 以降の未初期化分を初期化
+		memset((char *)&m_bmpinfo + sizeof(BITMAPINFOHEADER) + m_bits_size, 0,
+				sizeof(BITMAPV5HEADER) - sizeof(BITMAPINFOHEADER) - m_bits_size);
+		// BITMAPV5HEADER の値を設定
 		if ( m_bits_size == 0 ){
 			m_bmpinfo.bV5RedMask = 0xff;
 			m_bmpinfo.bV5GreenMask = 0xff00;
 			m_bmpinfo.bV5BlueMask = 0xff0000;
 		}
-		m_bits_size = 0;
-		m_bmpinfo.bV5AlphaMask =
-			(m_pixelFormat == GUID_WICPixelFormat32bppBGRA) ? 0xff000000 : 0;
+		if ( m_pixelFormat == GUID_WICPixelFormat32bppBGRA ){
+			m_bmpinfo.bV5AlphaMask = 0xff000000;
+		}
 		m_bmpinfo.bV5CSType = PROFILE_EMBEDDED;
 //		m_bmpinfo.bV5Endpoints = 0;
 //		m_bmpinfo.bV5GammaRed = 0;
@@ -1272,8 +1292,10 @@ int SetBitmapinfoHeader(HLOCAL *pHBInfo)
 		m_bmpinfo.bV5ProfileSize = m_ICCsize;
 //		m_bmpinfo.bV5Reserved = 0;
 
+		m_bits_size = 0;
 		m_ICCcontext->GetProfileBytes(m_bmpinfo.bV5ProfileSize, static_cast<BYTE *>(*pHBInfo) + m_bmpinfo.bV5ProfileData, &ProfileSize);
 		m_ICCcontext->Release();
+		m_ICCcontext = NULL;
 	}
 	m_HeaderPtr = static_cast<BITMAPINFOHEADER *>(*pHBInfo);
 	memcpy(m_HeaderPtr, &m_bmpinfo, m_bmpinfo.bV5Size + m_bits_size);
@@ -1283,6 +1305,7 @@ int SetBitmapinfoHeader(HLOCAL *pHBInfo)
 void SetRotate(void)
 {
 	if ( FAILED(m_image->CreateBitmapFlipRotator(&m_flip)) ) return;
+
 	int ropt = WICBitmapTransformFlipVertical;
 
 	if ( m_metadata != NULL ){
@@ -1334,7 +1357,16 @@ void SetRotate(void)
 			}
 		}
 	}
-	m_flip->Initialize(m_bmp, static_cast<WICBitmapTransformOptions>(ropt));
+	if ( SUCCEEDED(m_flip->Initialize(m_bmp, static_cast<WICBitmapTransformOptions>(ropt))) ){
+		m_bmp = m_flip;
+	}else{ // 失敗したときは、エラーよりも向き補正していない画像出力を優先する
+		// m_flip は、Release() で解放
+		m_result_flags &= ~SUSIE_DECODE_FIX_ROTATE;
+		if ( (m_flags & SUSIE_DECODE_REQUEST_ROTATE) &&
+			 (m_rotate >= 5) && (m_rotate <= 8) ){
+			SwapXY(); // 元に戻す
+		}
+	}
 }
 
 void FixAspectRate()
@@ -1342,7 +1374,10 @@ void FixAspectRate()
 	int newWidth, newHeight;
 	double dpiX, dpiY, rate;
 
-	if ( !(m_flags & SUSIE_DECODE_REQUEST_FIX_ASPECT) || (m_bmpinfo.bV5XPelsPerMeter == m_bmpinfo.bV5YPelsPerMeter) ) return;
+	if ( !(m_flags & SUSIE_DECODE_REQUEST_FIX_ASPECT) ||
+		 (m_bmpinfo.bV5XPelsPerMeter == m_bmpinfo.bV5YPelsPerMeter) ){
+		return;
+	}
 
 	newWidth = m_HeaderPtr->biWidth;
 	newHeight = m_HeaderPtr->biHeight;
@@ -1356,27 +1391,28 @@ void FixAspectRate()
 	if ( (rate < 0.2) || (rate > 5.0) ) return; // 比率が5越えの時は異常
 
 	if ( rate > 1.0 ){ // widthが高解像度
-		newHeight = static_cast<DWORD>(
-			static_cast<double>(newHeight) * dpiX / dpiY);
-		m_HeaderPtr->biHeight = newHeight;
-		m_HeaderPtr->biYPelsPerMeter = m_bmpinfo.bV5XPelsPerMeter;
+		newHeight =
+			static_cast<DWORD>(static_cast<double>(newHeight) * dpiX / dpiY);
 	}else{ // heightが高解像度
-		newWidth = static_cast<DWORD>(
-			static_cast<double>(newWidth) * dpiY / dpiX);
-		m_HeaderPtr->biWidth = newWidth;
-		m_HeaderPtr->biXPelsPerMeter = m_bmpinfo.bV5YPelsPerMeter;
+		newWidth =
+			static_cast<DWORD>(static_cast<double>(newWidth) * dpiY / dpiX);
 	}
 	if ( FAILED(m_image->CreateBitmapScaler(&m_scale)) ) return;
 
-	if ( SUCCEEDED(m_scale->Initialize(m_bmp, newWidth, newHeight, WICBitmapInterpolationModeFant)) ){
-		m_result_flags |= SUSIE_DECODE_FIX_ASPECT;
-		m_bmp = m_scale;
-		return;
+	if ( FAILED(m_scale->Initialize(m_bmp, newWidth, newHeight, WICBitmapInterpolationModeFant)) ){
+		return; // 失敗した m_scale は、Release() で解放
 	}
 
-	m_scale->Release();
-	m_scale = NULL;
-	return;
+	if ( rate > 1.0 ){ // widthが高解像度
+		m_HeaderPtr->biHeight = newHeight;
+		m_HeaderPtr->biYPelsPerMeter = m_bmpinfo.bV5XPelsPerMeter;
+	}else{ // heightが高解像度
+		m_HeaderPtr->biWidth = newWidth;
+		m_HeaderPtr->biXPelsPerMeter = m_bmpinfo.bV5YPelsPerMeter;
+	}
+
+	m_result_flags |= SUSIE_DECODE_FIX_ASPECT;
+	m_bmp = m_scale;
 }
 
 #pragma pack(push, 1)
@@ -1469,7 +1505,7 @@ void ScaleTo24(HLOCAL *pHBm, DWORD Wsize)
 	}
 }
 
-int CopyPixels(HLOCAL *pHBm)
+SUSIE_ERROR CopyPixels(HLOCAL *pHBm)
 {
 	DWORD Wsize;
 	__int64 bmpsize;
@@ -1489,7 +1525,7 @@ int CopyPixels(HLOCAL *pHBm)
 	*pHBm = LocalAlloc(LMEM_FIXED, m_HeaderPtr->biSizeImage);
 	if ( *pHBm == NULL ) return SUSIEERROR_EMPTYMEMORY;
 
-	if ( SUCCEEDED(m_flip->CopyPixels(NULL, Wsize, m_HeaderPtr->biSizeImage, (BYTE *)*pHBm)) ){
+	if ( SUCCEEDED(m_bmp->CopyPixels(NULL, Wsize, m_HeaderPtr->biSizeImage, (BYTE *)*pHBm)) ){
 		if ( AlphaConvert ){
 			m_result_flags |= SUSIE_DECODE_MERGE_ALPHA;
 			ConvertAlpha(reinterpret_cast<MaskBits *>(*pHBm),
@@ -1505,14 +1541,12 @@ int CopyPixels(HLOCAL *pHBm)
 
 void CopyPalette(void)
 {
-	if ( m_colors == 0 ) return;
-
 	IWICPalette *wicpal;
 	WICColor *palette;
 
-	m_image->CreatePalette(&wicpal);
-	m_bmp->CopyPalette(wicpal);
+	if ( m_colors == 0 ) return;
 
+	// ダミーパレットを生成
 	palette = reinterpret_cast<WICColor *>((BYTE *)m_HeaderPtr + m_HeaderPtr->biSize);
 	if ( m_colors == 2 ){
 		palette[0] = 0;
@@ -1523,6 +1557,9 @@ void CopyPalette(void)
 		}
 	}
 
+	// 画像のパレットを上書き
+	if ( FAILED(m_image->CreatePalette(&wicpal)) ) return;
+	m_bmp->CopyPalette(wicpal);
 	wicpal->GetColors(m_colors, palette, (UINT *)&m_HeaderPtr->biClrUsed);
 	wicpal->Release();
 
@@ -1539,13 +1576,15 @@ void Release(void)
 	NullRelease(m_scale);
 	NullRelease(m_flip);
 	NullRelease(m_colortransform);
+	NullRelease(m_ICCcontext);
 	NullRelease(m_metadata);
-	NullRelease(m_PixelInfo);
+//	NullRelease(m_PixelInfo);
 	NullRelease(m_conv);
 	NullRelease(m_frame);
 	NullRelease(m_Thumbnailbmp);
 	NullRelease(m_decoder);
 	NullRelease(m_SrcStream);
+	// m_bmp は、m_flip 等のコピー値なので Release 不要
 	m_image->Release();
 	if ( m_InitResult == CO_E_NOTINITIALIZED ) CoUninitialize();
 }
@@ -1555,64 +1594,65 @@ char *PropvToStr(PROPVARIANT &v, char *dest, char *destmax)
 	size_t len; // 保存可能な文字数(\0 は別途確保済み)
 
 	len = destmax - dest;
+	if ( len <= 16 ) return dest; // 十分な余裕がない
 	switch (v.vt){
 		case VT_EMPTY:
 			break;
 
 		case VT_NULL:
-			if ( len > 8 ) dest += wsprintfA(dest, "(null)");
+			dest += wsprintfA(dest, "(null)"); // min 8 chars
 			break;
 
 		case VT_UI2 | VT_BYREF:
-			if ( len > 16 ) dest += wsprintfA(dest, "%u", *v.plVal);
+			dest += wsprintfA(dest, "%u", *v.puiVal); // min 16 chars
 			break;
 
 		case VT_UI2 | VT_VECTOR:
-			if ( len > 16 ) dest += wsprintfA(dest, "%u", v.caui.pElems[0]);
+			if ( v.caui.cElems == 0 ) break;
+			dest += wsprintfA(dest, "%u", v.caui.pElems[0]); // min 16 chars
 			if ( v.caui.cElems > 1 ){
 				ULONG left = 1;
 				do {
-					if ( (destmax - dest) > 16 ){
-						dest += wsprintfA(dest, ",%u", v.caui.pElems[left]);
-					}
+					if ( (destmax - dest) < 16 ) break;
+					dest += wsprintfA(dest, ",%u", v.caui.pElems[left]);
 				}while( ++left < v.caui.cElems);
 			}
 			break;
 
 		case VT_UI4 | VT_VECTOR:
-			if ( len > 16 ) dest += wsprintfA(dest, "%u", v.caul.pElems[0]);
+			if ( v.caul.cElems == 0 ) break;
+			dest += wsprintfA(dest, "%u", v.caul.pElems[0]); // min 16 chars
 			if ( v.caul.cElems > 1 ){
 				ULONG left = 1;
 				do {
-					if ( (destmax - dest) > 16 ){
-						dest += wsprintfA(dest, ",%u", v.caul.pElems[left]);
-					}
+					if ( (destmax - dest) < 16 ) break;
+					dest += wsprintfA(dest, ",%u", v.caul.pElems[left]);
 				}while( ++left < v.caul.cElems);
 			}
 			break;
 
 		case VT_UI1 | VT_VECTOR:
-			if ( len > 16 ) dest += wsprintfA(dest, "%u", v.caub.pElems[0]);
+			if ( v.caub.cElems == 0 ) break;
+			dest += wsprintfA(dest, "%u", v.caub.pElems[0]); // min 16 chars
 			if ( v.caub.cElems > 1 ){
 				ULONG left = 1;
 				do {
-					if ( (destmax - dest) > 16 ){
-						dest += wsprintfA(dest, ",%u", v.caub.pElems[left]);
-					}
+					if ( (destmax - dest) < 16 ) break;
+					dest += wsprintfA(dest, ",%u", v.caub.pElems[left]);
 				}while( ++left < v.caub.cElems);
 			}
 			break;
 
 		case VT_UI1:
-			if ( len > 8 ) dest += wsprintfA(dest, "%u", v.bVal);
+			dest += wsprintfA(dest, "%u", v.bVal); // min 8 chars
 			break;
 
 		case VT_UI2:
-			if ( len > 8 ) dest += wsprintfA(dest, "%u", v.uiVal);
+			dest += wsprintfA(dest, "%u", v.uiVal); // min 8 chars
 			break;
 
 		case VT_UI4:
-			if ( len > 16 ) dest += wsprintfA(dest, "%u", v.lVal);
+			dest += wsprintfA(dest, "%u", v.lVal); // min 16 chars
 			break;
 
 		case VT_UI8:
@@ -1620,35 +1660,37 @@ char *PropvToStr(PROPVARIANT &v, char *dest, char *destmax)
 			break;
 
 		case VT_UI4 | VT_BYREF:
-			if ( len > 16 ) dest += wsprintfA(dest, "%u", *v.pintVal);
+			dest += wsprintfA(dest, "%u", *v.puintVal); // min 16 chars
 			break;
 
 		case VT_I8:
 			if ( len > 32 ) dest += wsprintfA(dest, "0x%Ix", v.hVal);
 			break;
 
-		case VT_LPSTR: {
-			size_t copylen;
+		case VT_LPSTR:
+			if ( v.pszVal != NULL ){
+				size_t copylen;
 
-			copylen = strlen(v.pszVal);
-			if ( len > copylen ){
-				memcpy(dest, v.pszVal, copylen + 1);
+				copylen = strlen(v.pszVal);
+				if ( len > copylen ){
+					memcpy(dest, v.pszVal, copylen + 1);
+					dest += copylen;
+				}
+			}
+			break;
+
+		case VT_LPWSTR:
+			if ( v.pwszVal != NULL ){
+				DWORD copylen;
+
+				copylen = UnicodeToAnsi(v.pwszVal, dest, len + 1);
+				if ( copylen >= 1 ) copylen--; // '\0' を除去
 				dest += copylen;
 			}
 			break;
-		}
-		case VT_LPWSTR: {
-			DWORD copylen;
 
-			copylen = UnicodeToAnsi(v.pwszVal, dest, len + 1);
-			if ( copylen > 1 ) copylen--; // '\0' を除去
-			dest += copylen;
-			break;
-		}
 		case VT_BOOL:
-			if ( len > 8 ){
-				dest += wsprintfA(dest, v.boolVal ? "true" : "false");
-			}
+			dest += wsprintfA(dest, v.boolVal ? "true" : "false"); // min 8 chars
 			break;
 
 		case VT_BLOB:
@@ -1658,7 +1700,7 @@ char *PropvToStr(PROPVARIANT &v, char *dest, char *destmax)
 			break;
 
 		default:
-			if ( len > 16 ){
+			if ( len > 24 ){
 				dest += wsprintfA(dest, "unknown type %x", v.vt);
 			}
 			break;
@@ -1697,12 +1739,18 @@ char *EnumProps(IWICMetadataQueryReader *metadata, char *dest, char *destmax)
 		LPOLESTR str;
 		ULONG fetched;
 
-		while ( SUCCEEDED(enummeta->Next(1, &str, &fetched)) && (fetched == 1) ){
+		while ( ((destmax - dest) > 8) &&
+				SUCCEEDED(enummeta->Next(1, &str, &fetched)) &&
+				(fetched == 1) ){
 			PROPVARIANT propvar;
 			size_t copylen;
 
 			copylen = UnicodeToAnsi(str, dest, (destmax - dest));
-			if ( copylen > 1 ) copylen--;
+			if ( copylen <= 1 ){ // 不足しているので列挙終了
+				CoTaskMemFree(str);
+				break;
+			}
+			copylen--;
 			dest += copylen;
 
 			PropVariantInit(&propvar);
@@ -1772,7 +1820,23 @@ HLOCAL GetInfoText(void)
 			metadata->Release();
 		}
 	}
+/*
+	GIF
+		Global
+		/commentext/TextEntry		VT_LPSTR
+		/logscrdesc/PixelAspectRatio
+		Frame
+		/grctlext/TransparentColorIndex
 
+	PNG
+		/iTXt/TextEntry		LPWSTR
+
+	TIFF
+		/ifd/exif
+
+	Jpeg
+		/app1/ifd/exif
+*/
 	if ( m_metadata != NULL ){
 		PROPVARIANT v;
 
@@ -1812,24 +1876,6 @@ HLOCAL GetInfoText(void)
 			}
 			PropVariantClear(&v);
 		}
-/*
-	GIF
-		Global
-		/commentext/TextEntry		VT_LPSTR
-		/logscrdesc/PixelAspectRatio
-		Frame
-		/grctlext/TransparentColorIndex
-
-	PNG
-		/iTXt/TextEntry		LPWSTR
-
-	TIFF
-		/ifd/exif
-
-	Jpeg
-		/app1/ifd/exif
-
-*/
 	}
 	*dest = '\0';
 	return hInfo;
@@ -1878,13 +1924,13 @@ void SetResult(SUSIE_DECODE_PARAMETERS *params)
 }
 
 	private:
-		IWICBitmapSource *m_bmp; // m_frame とか m_conv とか m_colortransform とかを示す
+		IWICBitmapSource *m_bmp; // m_frame とか m_conv とか m_colortransform とかを示す、加工済み BitmapSource
 
 		IWICImagingFactory *m_image;
 		IWICBitmapDecoder *m_decoder;
 		IWICBitmapFrameDecode *m_frame;
 		IWICFormatConverter *m_conv;
-		IWICPixelFormatInfo *m_PixelInfo;
+//		IWICPixelFormatInfo *m_PixelInfo;
 		IWICMetadataQueryReader *m_metadata;
 		IWICColorTransform *m_colortransform;
 		IWICBitmapFlipRotator *m_flip;
@@ -1904,13 +1950,13 @@ void SetResult(SUSIE_DECODE_PARAMETERS *params)
 
 		DWORD m_frame_count, m_frame_rate;
 		DWORD m_frame_no; // 読み込みを行う frame 番号
-		DWORD m_frame_delay; // 1以上…アニメーションあり、待機時間(ms)
+//		DWORD m_frame_delay; // 1以上…アニメーションあり、待機時間(ms)
 		DWORD m_flags; // SUSIE_DECODE_REQUEST_xxx
 		DWORD m_result_flags; // SUSIE_DECODE_xxx
 		DWORD m_rotate;
 		DWORD m_file_id;
 
-int SetColorbitsTransform(const WICPixelFormatGUID &pixformat, const WICBitmapPaletteType &palettetype)
+SUSIE_ERROR SetColorbitsTransform(const WICPixelFormatGUID &pixformat, const WICBitmapPaletteType &palettetype)
 {
 	if ( FAILED(m_image->CreateFormatConverter(&m_conv)) ){
 		return SUSIEERROR_INTERNAL;
@@ -1923,10 +1969,10 @@ int SetColorbitsTransform(const WICPixelFormatGUID &pixformat, const WICBitmapPa
 	}
 
 	// 24bpp BGR で再度試す
-	m_bmpinfo.bV5BitCount = 24;
 	if ( SUCCEEDED(m_conv->Initialize(m_bmp, GUID_WICPixelFormat24bppBGR,
 				WICBitmapDitherTypeNone, NULL, 0.0f,
 				WICBitmapPaletteTypeCustom)) ){
+		m_bmpinfo.bV5BitCount = 24;
 		m_bmp = m_conv;
 		return SUSIEERROR_NOERROR;
 	}
@@ -1976,6 +2022,8 @@ BOOL WINAPI DllMain(HINSTANCE hInst, unsigned long reason, void *)
 -----------------------------------------------------------------------------*/
 const char InfoAPIType[] = "00IN";
 const char InfoCopyright[] = "WIC Plug-in Version " VERSIONS " " Copyright;
+const char InfoTypeNOWIC[] = "WIC Load Error";
+const char InfoExtNOWIC[] = "*.NO-WIC";
 const char InfoTypeHeader[] = "WIC-";
 
 int PluginInfoStr(LPSTR buf, int buflen, const char *str, int strlength)
@@ -1993,7 +2041,15 @@ int ExtEnum(int index, LPSTR buf, int buflen)
 	char *dest = buf;
 
 	*dest = '\0';
-	if ( LoadCodecList() == 0 ) return 0;
+	if ( LoadCodecList() <= 0 ){
+		if ( index == 2 ){
+			return PluginInfoStr(buf, buflen, InfoTypeNOWIC, sizeof(InfoTypeNOWIC));
+		}
+		if ( index == 3 ){
+			return PluginInfoStr(buf, buflen, InfoExtNOWIC, sizeof(InfoExtNOWIC));
+		}
+		return 0; // 戻り値は codecs.count 相当
+	}
 	int leftcodecs = codecs.count;
 	CODECLISTITEMSTRUCT *codeclistp = codecs.list;
 
@@ -2036,10 +2092,10 @@ extern "C" int __stdcall GetPluginInfo(int infono, LPSTR buf, int buflen)
 {
 	if ( (buf == NULL) || (buflen <= 0) ) return 0;
 	if ( (infono >= 0) && (infono <= 3) ){
-		if ( infono == 3 ){
-			int copylen, copylen2;
-
+		if ( (infono == 3) && (codecs.count > 0) ){
 			if ( (previous_decoder[0] != '\0') && (previous_decoder_tid == GetCurrentThreadId()) ){
+				int copylen, copylen2;
+
 				copylen = PluginInfoStr(buf, buflen, InfoTypeHeader, sizeof(InfoTypeHeader));
 				copylen2 = UnicodeToAnsi(previous_decoder, buf + copylen, buflen - copylen);
 				return (copylen2 <= 0) ? copylen : (copylen + copylen2 - 1);
@@ -2080,9 +2136,9 @@ extern "C" int __stdcall GetPluginInfoW(int infono, LPWSTR buf, int buflen)
 //-----------------------------------------------------------------------------
 extern "C" int __stdcall IsSupportedW(LPCWSTR filename, void *dw)
 {
-	BYTE buf[2 * 1024], *header;
+	BYTE buf[SUSIE_CHECK_SIZE], *header;
 
-	if ( LoadCodecList() == 0 ) return 0;
+	if ( LoadCodecList() <= 0 ) return 0;
 
 	previous_decoder = decoder_none;
 	if ( (DWORD_PTR)dw & ~(DWORD_PTR)0xffff ){ // 2K メモリイメージ
@@ -2127,7 +2183,7 @@ extern "C" int __stdcall IsSupportedW(LPCWSTR filename, void *dw)
 	if ( /* icon */	(!memcmp(header, "\0\0\1", 4) ||
 		 /* cur */	 (((DWORD_PTR)dw & ~(DWORD_PTR)0xffff) &&
 					  !memcmp(header, CurHeader, sizeof(CurHeader))) ) &&
-		(*(DWORD *)(header + 0x12) == (*(WORD *)(header + 4) * 0x10 + 6)) ){
+		(*(DWORD *)(header + 0x12) == ((DWORD)*(WORD *)(header + 4) * 0x10 + 6)) ){
 		filename = L".ico";
 	}else
 
@@ -2160,10 +2216,9 @@ extern "C" int __stdcall IsSupportedW(LPCWSTR filename, void *dw)
 		while ( leftcodecs-- ){
 			WCHAR *extlist = codeclistp->ext;
 
-			for (;;){
+			if ( codeclistp->enable ) for (;;){
 				if ( *extlist == '\0' ) break;
 				if ( wcsicmp(extp, extlist + 1) == 0 ){
-					if ( codeclistp->enable == FALSE ) return 0;
 					previous_decoder = codeclistp->ext + 1;
 					previous_decoder_tid = GetCurrentThreadId();
 					return 1;
@@ -2189,14 +2244,15 @@ extern "C" int __stdcall IsSupported(LPCSTR filename, void *dw)
 	if ( ptr == NULL ){
 		wext[0] = '\0';
 	}else{
-		AnsiToUnicode(ptr, wext, 0x100);
+		if ( AnsiToUnicode(ptr, wext, 0x100) == 0 ) return 0;
+		wext[0x100 - 1] = '\0';
 	}
 
 	return IsSupportedW(wext, dw);
 }
 
 //-----------------------------------------------------------------------------
-extern "C" int __stdcall GetPictureInfoW(LPCWSTR buf, LONG_PTR len, unsigned int flags, struct PictureInfo *lpInfo)
+extern "C" SUSIE_ERROR __stdcall GetPictureInfoW(LPCWSTR buf, LONG_PTR len, unsigned int flags, struct PictureInfo *lpInfo)
 {
 	int result;
 	WIC_Susie_class wic;
@@ -2218,7 +2274,7 @@ extern "C" int __stdcall GetPictureInfoW(LPCWSTR buf, LONG_PTR len, unsigned int
 		return SUSIEERROR_NOTSUPPORT;
 	}
 
-	if ( LoadCodecList() == 0 ) return SUSIEERROR_INTERNAL;
+	if ( LoadCodecList() <= 0 ) return SUSIEERROR_INTERNAL;
 	if ( FAILED(wic.Init()) ) return SUSIEERROR_INTERNAL;
 
 	for (;;){
@@ -2252,13 +2308,15 @@ extern "C" int __stdcall GetPictureInfoW(LPCWSTR buf, LONG_PTR len, unsigned int
 	return result;
 }
 
-extern "C" int __stdcall GetPictureInfo(LPCSTR buf, LONG_PTR len, unsigned int flags, struct PictureInfo *lpInfo)
+extern "C" SUSIE_ERROR __stdcall GetPictureInfo(LPCSTR buf, LONG_PTR len, unsigned int flags, struct PictureInfo *lpInfo)
 {
 	if ( (flags & 7) == 0 ){ // ファイル名指定
 		WCHAR filenameW[MAX_PATH];
 
 		filenameW[0] = '\0';
-		AnsiToUnicode(buf, filenameW, MAX_PATH);
+		if ( AnsiToUnicode(buf, filenameW, MAX_PATH) == 0 ){
+			return SUSIEERROR_FAULTREAD;
+		}
 		filenameW[MAX_PATH - 1] = '\0';
 		return GetPictureInfoW(filenameW, len, flags, lpInfo);
 	}else{
@@ -2266,12 +2324,12 @@ extern "C" int __stdcall GetPictureInfo(LPCSTR buf, LONG_PTR len, unsigned int f
 	}
 }
 //-----------------------------------------------------------------------------
-extern "C" int __stdcall DecodePictureW(SUSIE_DECODE_PARAMETERS *params)
+extern "C" SUSIE_ERROR __stdcall DecodePictureW(SUSIE_DECODE_PARAMETERS *params)
 {
 	int result;
 	WIC_Susie_class wic;
 
-	if ( LoadCodecList() == 0 ) return SUSIEERROR_INTERNAL;
+	if ( LoadCodecList() <= 0 ) return SUSIEERROR_INTERNAL;
 	if ( FAILED(wic.Init()) ) return SUSIEERROR_INTERNAL;
 
 	for (;;){
@@ -2304,12 +2362,12 @@ extern "C" int __stdcall DecodePictureW(SUSIE_DECODE_PARAMETERS *params)
 	return result;
 }
 
-extern "C" int __stdcall GetPictureW(LPCWSTR buf, LONG_PTR len, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, SUSIE_PROGRESS progressCallback, LONG_PTR lData)
+extern "C" SUSIE_ERROR __stdcall GetPictureW(LPCWSTR buf, LONG_PTR len, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, SUSIE_PROGRESS progressCallback, LONG_PTR lData)
 {
 	int result;
 	WIC_Susie_class wic;
 
-	if ( LoadCodecList() == 0 ) return SUSIEERROR_INTERNAL;
+	if ( LoadCodecList() <= 0 ) return SUSIEERROR_INTERNAL;
 	if ( FAILED(wic.Init()) ) return SUSIEERROR_INTERNAL;
 
 	for (;;){
@@ -2339,13 +2397,15 @@ extern "C" int __stdcall GetPictureW(LPCWSTR buf, LONG_PTR len, unsigned int fla
 	return result;
 }
 
-extern "C" int __stdcall GetPicture(LPCSTR buf, LONG_PTR len, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, SUSIE_PROGRESS progressCallback, LONG_PTR lData)
+extern "C" SUSIE_ERROR __stdcall GetPicture(LPCSTR buf, LONG_PTR len, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, SUSIE_PROGRESS progressCallback, LONG_PTR lData)
 {
 	if ( (flag & SUSIE_SOURCE_MASK) == SUSIE_SOURCE_DISK ){ // ファイル名指定
 		WCHAR filenameW[MAX_PATH];
 
 		filenameW[0] = '\0';
-		AnsiToUnicode(buf, filenameW, MAX_PATH);
+		if ( AnsiToUnicode(buf, filenameW, MAX_PATH) == 0 ){
+			return SUSIEERROR_FAULTREAD;
+		}
 		filenameW[MAX_PATH - 1] = '\0';
 		return GetPictureW(filenameW, len, flag, pHBInfo, pHBm, progressCallback, lData);
 	}else{
@@ -2353,12 +2413,12 @@ extern "C" int __stdcall GetPicture(LPCSTR buf, LONG_PTR len, unsigned int flag,
 	}
 }
 //-----------------------------------------------------------------------------
-extern "C" int __stdcall GetPreviewW(LPCWSTR buf, LONG_PTR len, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, SUSIE_PROGRESS progressCallback, LONG_PTR lData)
+extern "C" SUSIE_ERROR __stdcall GetPreviewW(LPCWSTR buf, LONG_PTR len, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, SUSIE_PROGRESS progressCallback, LONG_PTR lData)
 {
 	int result;
 	WIC_Susie_class wic;
 
-	if ( LoadCodecList() == 0 ) return SUSIEERROR_INTERNAL;
+	if ( LoadCodecList() <= 0 ) return SUSIEERROR_INTERNAL;
 	if ( FAILED(wic.Init()) ) return SUSIEERROR_INTERNAL;
 
 	for (;;){
@@ -2394,13 +2454,15 @@ extern "C" int __stdcall GetPreviewW(LPCWSTR buf, LONG_PTR len, unsigned int fla
 	return result;
 }
 
-extern "C" int __stdcall GetPreview(LPCSTR buf, LONG_PTR len, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, SUSIE_PROGRESS progressCallback, LONG_PTR lData)
+extern "C" SUSIE_ERROR __stdcall GetPreview(LPCSTR buf, LONG_PTR len, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, SUSIE_PROGRESS progressCallback, LONG_PTR lData)
 {
 	if ( (flag & SUSIE_SOURCE_MASK) == SUSIE_SOURCE_DISK ){ // ファイル名指定
 		WCHAR filenameW[MAX_PATH];
 
 		filenameW[0] = '\0';
-		AnsiToUnicode(buf, filenameW, MAX_PATH);
+		if ( AnsiToUnicode(buf, filenameW, MAX_PATH) == 0 ){
+			return SUSIEERROR_FAULTREAD;
+		}
 		filenameW[MAX_PATH - 1] = '\0';
 		return GetPreviewW(filenameW, len, flag, pHBInfo, pHBm, progressCallback, lData);
 	}else{
@@ -2463,24 +2525,41 @@ void MoveCenterWindow(HWND hWnd, HWND hParentWnd)
 
 void ConfigProc_InitDialog(HWND hDlg)
 {
+	HWND hCodecsListWnd;
+
 	MoveCenterWindow(hDlg, GetParent(hDlg));
+	hCodecsListWnd = GetDlgItem(hDlg, IDV_CODECS);
+	if ( LoadCodecList() > 0 ){ // コーデック一覧・設定読み込み
+		ListCodecList(hCodecsListWnd); // コーデック一覧
 
-	LoadCodecList(); // コーデック一覧・設定読み込み
-	ListCodecList(GetDlgItem(hDlg, IDV_CODECS)); // コーデック一覧
-
-	// 各種設定
-	CheckDlgButton(hDlg, IDX_EXIFROTATE, X_ExifRotate);
-	CheckDlgButton(hDlg, IDX_COLORPROFILE, X_ColorProfile == XCP_sRGB);
-	CheckDlgButton(hDlg, IDX_EMBEDPROFILE, X_ColorProfile == XCP_Embed);
-	CheckDlgButton(hDlg, IDX_CONV32NOALPHA, X_Conv32NoAlpha);
-	CheckDlgButton(hDlg, IDX_WIPEALPHAONPALETTE, X_WipeAlphaOnPalette);
+		// 各種設定
+		CheckDlgButton(hDlg, IDX_EXIFROTATE, X_ExifRotate);
+		CheckDlgButton(hDlg, IDX_COLORPROFILE, X_ColorProfile == XCP_sRGB);
+		CheckDlgButton(hDlg, IDX_EMBEDPROFILE, X_ColorProfile == XCP_Embed);
+		CheckDlgButton(hDlg, IDX_CONV32NOALPHA, X_Conv32NoAlpha);
+		CheckDlgButton(hDlg, IDX_WIPEALPHAONPALETTE, X_WipeAlphaOnPalette);
 #ifndef _WIN64
-	CheckDlgButton(hDlg, IDX_SUSIEFIX, X_SusieFix);
+		CheckDlgButton(hDlg, IDX_SUSIEFIX, X_SusieFix);
 #endif
-	CheckDlgButton(hDlg, IDX_TRANSP, X_MergeAlpha);
-	CheckDlgButton(hDlg, IDX_ASPECT, X_FixAspect);
-	CheckDlgButton(hDlg, IDX_SAVEAPPDATA, X_SaveAppData != SAVE_SHARE);
-	CheckDlgButton(hDlg, IDX_TinyPage, X_TinyPage);
+		CheckDlgButton(hDlg, IDX_TRANSP, X_MergeAlpha);
+		CheckDlgButton(hDlg, IDX_ASPECT, X_FixAspect);
+		CheckDlgButton(hDlg, IDX_SAVEAPPDATA, X_SaveAppData != SAVE_SHARE);
+		CheckDlgButton(hDlg, IDX_TinyPage, X_TinyPage);
+
+	}else{ // WIC 使用不可
+		LV_ITEM lvi;
+		LV_COLUMN lvc;
+
+		lvc.mask = LVCF_WIDTH;
+		lvc.cx = 2000;
+		ListView_InsertColumn(hCodecsListWnd, 0, &lvc);
+
+		lvi.pszText = L"**WIC Load Error**";
+		lvi.mask = LVIF_TEXT;
+		lvi.iItem = 0;
+		lvi.iSubItem = 0;
+		ListView_InsertItem(hCodecsListWnd, &lvi);
+	}
 }
 
 INT_PTR CALLBACK ConfigProc(HWND hDlg, UINT iMsg, WPARAM wParam, LPARAM lParam)
@@ -2493,26 +2572,28 @@ INT_PTR CALLBACK ConfigProc(HWND hDlg, UINT iMsg, WPARAM wParam, LPARAM lParam)
 		case WM_COMMAND:
 			switch ( LOWORD(wParam) ){
 				case IDOK:
-					X_ExifRotate = IsDlgButtonChecked(hDlg, IDX_EXIFROTATE);
-					X_ColorProfile = XCP_OFF;
-					if ( IsDlgButtonChecked(hDlg, IDX_COLORPROFILE) ){
-						X_ColorProfile = XCP_sRGB;
-					}
-					if ( IsDlgButtonChecked(hDlg, IDX_EMBEDPROFILE) ){
-						X_ColorProfile = XCP_Embed;
-					}
-					X_Conv32NoAlpha = IsDlgButtonChecked(hDlg, IDX_CONV32NOALPHA);
-					X_WipeAlphaOnPalette = IsDlgButtonChecked(hDlg, IDX_WIPEALPHAONPALETTE);
+					if ( codecs.count > 0 ){
+						X_ExifRotate = IsDlgButtonChecked(hDlg, IDX_EXIFROTATE);
+						X_ColorProfile = XCP_OFF;
+						if ( IsDlgButtonChecked(hDlg, IDX_COLORPROFILE) ){
+							X_ColorProfile = XCP_sRGB;
+						}
+						if ( IsDlgButtonChecked(hDlg, IDX_EMBEDPROFILE) ){
+							X_ColorProfile = XCP_Embed;
+						}
+						X_Conv32NoAlpha = IsDlgButtonChecked(hDlg, IDX_CONV32NOALPHA);
+						X_WipeAlphaOnPalette = IsDlgButtonChecked(hDlg, IDX_WIPEALPHAONPALETTE);
 #ifndef _WIN64
-					X_SusieFix = IsDlgButtonChecked(hDlg, IDX_SUSIEFIX);
+						X_SusieFix = IsDlgButtonChecked(hDlg, IDX_SUSIEFIX);
 #endif
-					X_MergeAlpha = IsDlgButtonChecked(hDlg, IDX_TRANSP);
-					X_FixAspect = IsDlgButtonChecked(hDlg, IDX_ASPECT);
-					X_SaveAppData = IsDlgButtonChecked(hDlg, IDX_SAVEAPPDATA) ?
-							SAVE_USERAPP : SAVE_SHARE;
-					X_TinyPage = IsDlgButtonChecked(hDlg, IDX_TinyPage);
-					DumpConfig(hDlg, X_SaveAppData);
-					SetDefaultFlags();
+						X_MergeAlpha = IsDlgButtonChecked(hDlg, IDX_TRANSP);
+						X_FixAspect = IsDlgButtonChecked(hDlg, IDX_ASPECT);
+						X_SaveAppData = IsDlgButtonChecked(hDlg,
+								IDX_SAVEAPPDATA) ? SAVE_USERAPP : SAVE_SHARE;
+						X_TinyPage = IsDlgButtonChecked(hDlg, IDX_TinyPage);
+						DumpConfig(hDlg, X_SaveAppData);
+						SetDefaultFlags();
+					}
 					EndDialog(hDlg, TRUE);
 					break;
 
@@ -2565,10 +2646,10 @@ extern "C" int __stdcall ConfigurationDlg(HWND hWnd, int function)
 	return SUSIEERROR_NOERROR;
 }
 
-extern "C" int __stdcall CreatePictureW(LPCWSTR filepath, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, struct PictureInfo *, SUSIE_PROGRESS progressCallback, LONG_PTR lData)
+extern "C" SUSIE_ERROR __stdcall CreatePictureW(LPCWSTR filepath, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, struct PictureInfo *, SUSIE_PROGRESS progressCallback, LONG_PTR lData)
 {
 	HRESULT InitResult;
-	int result = SUSIEERROR_NOERROR;
+	int result = SUSIEERROR_INTERNAL;
 	IWICImagingFactory *wicimage;
 	IWICBitmapEncoder *encoder;
 	IWICBitmapDecoder *decoder;
@@ -2604,11 +2685,9 @@ extern "C" int __stdcall CreatePictureW(LPCWSTR filepath, unsigned int flag, HLO
 					CLSCTX_INPROC_SERVER, IID_IWICImagingFactory,
 					reinterpret_cast<void**>(&wicimage))) ){
 				CoUninitialize();
-				ShowNoWICmessage();
 				return SUSIEERROR_INTERNAL;
 			}
 		}else{
-			ShowNoWICmessage();
 			return SUSIEERROR_INTERNAL;
 		}
 	}
@@ -2625,13 +2704,13 @@ extern "C" int __stdcall CreatePictureW(LPCWSTR filepath, unsigned int flag, HLO
 		}
 		while ( S_OK == codecenum->Next(1, &enumitem, 0) ){
 			IWICBitmapEncoderInfo *wicinfo;
-			HRESULT result;
+			HRESULT hr;
 			WCHAR cbuf[512];
 			UINT extlen;
 
-			result = enumitem->QueryInterface(IID_IWICBitmapEncoderInfo, (void **)&wicinfo);
+			hr = enumitem->QueryInterface(IID_IWICBitmapEncoderInfo, (void **)&wicinfo);
 			enumitem->Release();
-			if ( FAILED(result) ) continue;
+			if ( FAILED(hr) ) continue;
 
 			extlen = sizeof(cbuf) / sizeof(WCHAR);
 			if ( SUCCEEDED(wicinfo->GetFileExtensions(extlen, cbuf, &extlen)) ){
@@ -2681,19 +2760,24 @@ extern "C" int __stdcall CreatePictureW(LPCWSTR filepath, unsigned int flag, HLO
 			return SUSIEERROR_EMPTYMEMORY;
 		}
 		image = reinterpret_cast<BYTE *>(GlobalLock(hGlobal));
+		if ( image != NULL ){
+			BITMAPFILEHEADER *bmpfh = reinterpret_cast<BITMAPFILEHEADER *>(image);
+			bmpfh->bfType = 'B' + 'M' * 0x100;
+			bmpfh->bfSize = sizeof(BITMAPFILEHEADER) + infosize + bitmapsize;
+			bmpfh->bfReserved1 = bmpfh->bfReserved2 = 0;
+			bmpfh->bfOffBits = sizeof(BITMAPFILEHEADER) + infosize;
 
-		BITMAPFILEHEADER *bmpfh = reinterpret_cast<BITMAPFILEHEADER *>(image);
-		bmpfh->bfType = 'B' + 'M' * 0x100;
-		bmpfh->bfSize = sizeof(BITMAPFILEHEADER) + infosize + bitmapsize;
-		bmpfh->bfReserved1 = bmpfh->bfReserved2 = 0;
-		bmpfh->bfOffBits = sizeof(BITMAPFILEHEADER) + infosize;
-
-		memcpy(image + sizeof(BITMAPFILEHEADER), LocalLock(*pHBInfo), infosize);
-		LocalUnlock(*pHBInfo);
-		memcpy(image + sizeof(BITMAPFILEHEADER) + infosize, LocalLock(*pHBm), bitmapsize);
-		LocalUnlock(*pHBm);
-		GlobalUnlock(hGlobal);
-		if ( FAILED(CreateStreamOnHGlobal(hGlobal, TRUE, &srcStream)) ){
+			memcpy(image + sizeof(BITMAPFILEHEADER), LocalLock(*pHBInfo), infosize);
+			LocalUnlock(*pHBInfo);
+			memcpy(image + sizeof(BITMAPFILEHEADER) + infosize, LocalLock(*pHBm), bitmapsize);
+			LocalUnlock(*pHBm);
+			GlobalUnlock(hGlobal);
+			if ( FAILED(CreateStreamOnHGlobal(hGlobal, TRUE, &srcStream)) ){
+				GlobalFree(hGlobal);
+				srcStream = NULL;
+			}
+		}else{
+			GlobalFree(hGlobal);
 			srcStream = NULL;
 		}
 	}
@@ -2714,8 +2798,9 @@ extern "C" int __stdcall CreatePictureW(LPCWSTR filepath, unsigned int flag, HLO
 	if ( (targetStream != NULL) && SUCCEEDED(targetStream->InitializeFromFilename(filepath, GENERIC_WRITE)) ){
 		UINT frameCount = 0;
 
-		encoder->Initialize(targetStream, WICBitmapEncoderNoCache);
-		if ( FAILED(decoder->GetFrameCount(&frameCount)) ) frameCount = 1;
+		if ( SUCCEEDED(encoder->Initialize(targetStream, WICBitmapEncoderNoCache)) ){
+			if ( FAILED(decoder->GetFrameCount(&frameCount)) ) frameCount = 1;
+		}
 
 		for ( UINT index = 0 ; index < frameCount ; ++index ){
 			IWICBitmapFrameDecode *sourceFrame;
@@ -2725,11 +2810,19 @@ extern "C" int __stdcall CreatePictureW(LPCWSTR filepath, unsigned int flag, HLO
 			GUID pixelFormat = { 0 };
 			UINT ccount;
 
-			decoder->GetFrame(index, &sourceFrame);
+			if ( FAILED(decoder->GetFrame(index, &sourceFrame)) ){
+				frameCount = 0;
+				break;
+			}
+
 			sourceFrame->GetSize(&width, &height);
 			sourceFrame->GetPixelFormat(&pixelFormat);
 
-			encoder->CreateNewFrame(&targetFrame, 0);
+			if ( FAILED(encoder->CreateNewFrame(&targetFrame, 0)) ){
+				sourceFrame->Release();
+				frameCount = 0;
+				break;
+			}
 			targetFrame->Initialize(NULL);
 			targetFrame->SetSize(width, height);
 			targetFrame->SetPixelFormat(&pixelFormat);
@@ -2773,15 +2866,18 @@ extern "C" int __stdcall CreatePictureW(LPCWSTR filepath, unsigned int flag, HLO
 			}
 
 			if ( FAILED(targetFrame->WriteSource(sourceFrame, 0)) ){
-				result = SUSIEERROR_INTERNAL;
+				targetFrame->Release();
+				sourceFrame->Release();
+				frameCount = 0;
+				break;
 			}
 			targetFrame->Commit();
 			targetFrame->Release();
 			sourceFrame->Release();
 		}
-		encoder->Commit();
-	}else{
-		result = SUSIEERROR_INTERNAL;
+		if ( frameCount > 0 ){
+			if ( SUCCEEDED(encoder->Commit()) ) result = SUSIEERROR_NOERROR;
+		}
 	}
 	if ( targetStream != NULL ) targetStream->Release();
 	if ( encoder != NULL ) encoder->Release();
@@ -2793,12 +2889,14 @@ extern "C" int __stdcall CreatePictureW(LPCWSTR filepath, unsigned int flag, HLO
 	return result;
 }
 
-extern "C" int __stdcall CreatePicture(LPCSTR filepath, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, struct PictureInfo *lpInfo, SUSIE_PROGRESS progressCallback, LONG_PTR lData)
+extern "C" SUSIE_ERROR __stdcall CreatePicture(LPCSTR filepath, unsigned int flag, HLOCAL *pHBInfo, HLOCAL *pHBm, struct PictureInfo *lpInfo, SUSIE_PROGRESS progressCallback, LONG_PTR lData)
 {
 	WCHAR filenameW[MAX_PATH];
 
 	filenameW[0] = '\0';
-	AnsiToUnicode(filepath, filenameW, MAX_PATH);
+	if ( AnsiToUnicode(filepath, filenameW, MAX_PATH) == 0 ){
+		return SUSIEERROR_FILEWRITE;
+	}
 	filenameW[MAX_PATH - 1] = '\0';
 	return CreatePictureW(filenameW, flag, pHBInfo, pHBm, lpInfo, progressCallback, lData);
 }

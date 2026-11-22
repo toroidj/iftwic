@@ -9,17 +9,18 @@
 
 //======================================================================== 雑用
 // sizeptr 分だけ確実に読み込む ReadFile
-BOOL SizedReadFile(HANDLE hFile, void *buffer, DWORD size, DWORD *sizeptr)
+BOOL SizedReadFile(_In_ HANDLE hFile, _Out_ void *buffer, _In_ DWORD size, _Inout_opt_ DWORD *sizeptr)
 {
 	DWORD readsize, totalsize = 0;
+	char *bufptr = buffer;
 
 	for(;;){
-		if ( ReadFile(hFile, buffer, size, &readsize, NULL) ){
+		if ( ReadFile(hFile, bufptr, size, &readsize, NULL) ){
 			totalsize += readsize;
 			if ( size <= readsize ) break;
 			if ( readsize != 0 ){
 				size -= readsize;
-				(char *)buffer += readsize;
+				bufptr += readsize;
 				continue;
 			}
 			// EOF 到着。*sizeptr 以上読み込んでいたら正常終了
@@ -34,16 +35,17 @@ BOOL SizedReadFile(HANDLE hFile, void *buffer, DWORD size, DWORD *sizeptr)
 }
 
 // size 分だけ確実に書き込む WriteFile
-BOOL SizedWriteFile(HANDLE hFile, void *buffer, DWORD size)
+BOOL SizedWriteFile(_In_ HANDLE hFile, _In_ const void *buffer, _In_ DWORD size)
 {
 	DWORD writesize;
+	const char *bufptr = buffer;
 
 	for(;;){
-		if ( WriteFile(hFile, buffer, size, &writesize, NULL) ){
+		if ( WriteFile(hFile, bufptr, size, &writesize, NULL) ){
 			if ( size <= writesize ) return TRUE;
 			if ( writesize != 0 ){
 				size -= writesize;
-				(char *)buffer += writesize;
+				bufptr += writesize;
 				continue;
 			}
 			// 書き込みできなくなった
@@ -110,6 +112,7 @@ BOOL CFGOpen(CFG *cfg, WCHAR *filename)
 {
 	HANDLE hFile;
 	BOOL result = TRUE;
+	LARGE_INTEGER filesize;
 
 	cfg->bottom = NULL;
 	cfg->size = 0;
@@ -119,8 +122,10 @@ BOOL CFGOpen(CFG *cfg, WCHAR *filename)
 	hFile = CreateFileW(filename, GENERIC_READ, FILE_SHARE_READ, NULL,
 			OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 	if ( hFile == INVALID_HANDLE_VALUE ) return FALSE;
-	cfg->size = GetFileSize(hFile, NULL);
-	if ( cfg->size < (0x7fffffff - CFG_MARGIN) ){ // エラー若しくは大きすぎの場合はエラー(cfg->bottom = NULL)
+	if ( (GetFileSizeEx(hFile, &filesize) == FALSE) || (filesize.QuadPart > 0x10000000) ){ // エラー若しくは大きすぎの場合はエラー
+		cfg->bottom = NULL;
+	}else{
+		cfg->size = (DWORD)filesize.QuadPart;
 		cfg->bottom = (char *)HeapAlloc(GetProcessHeap(), 0, cfg->size + CFG_MARGIN);
 	}
 	if ( cfg->bottom == NULL ){
@@ -130,6 +135,13 @@ BOOL CFGOpen(CFG *cfg, WCHAR *filename)
 	result = SizedReadFile(hFile, cfg->bottom, cfg->size, &cfg->size);
 	CloseHandle(hFile);
 	if ( result ){
+		// UTF8HEADER があれば空白に変換。CFGGetLine で読み込むこと前提
+		if ( (cfg->size >= UTF8HEADERSIZE) &&
+			 (memcmp(cfg->bottom, UTF8HEADER, UTF8HEADERSIZE) == 0) ){
+			cfg->bottom[0] = ' ';
+			cfg->bottom[1] = ' ';
+			cfg->bottom[2] = ' ';
+		}
 		memset(cfg->bottom + cfg->size, 0, CFG_MARGIN);
 	}else{
 		CFGClose(cfg);
@@ -198,7 +210,7 @@ char *CFGFixParam(char *string, char **next)
 {
 	char *ptr, *lastptr;
 
-	SkipSpaceA((const TCHAR **)&string);
+	SkipSpaceA((const char **)&string);
 							// 項目区切りを検索
 	ptr = string;
 	while ( *ptr && (*ptr != ',') ) ptr++;

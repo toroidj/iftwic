@@ -1,7 +1,7 @@
 @echo off
 set RETAIL=1
 rem *** set value ***
-set arcname=iftwic22.zip
+set arcname=iftwic22p2.zip
 set readme=iftwic.txt
 set vername=iftwic.h
 set srcname=iftwics.7z
@@ -30,7 +30,7 @@ rem *** Source Archive ***
 if %RETAIL%==0 goto :skipsource
 
 for %%i in (*) do CT %readme% %%i
-ppb /c %%u/7-zip32.dll,a %srcname% -hide -mx=9 makefile *.vcproj *.sln *.def *.bat *.c *.cpp *.h *.rc *.rh
+ppb /c %%u/7-zip32.dll,a %srcname% -hide -mx=9 makefile *.vc* *.sln *.def *.bat *.c *.cpp *.h *.rc *.rh
 CT %readme% %srcname%
 :skipsource
 

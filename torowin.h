@@ -1,11 +1,12 @@
 /*-----------------------------------------------------------------------------
 	Windows 用定義集
 -----------------------------------------------------------------------------*/
-#define TOROsWEB "http://toro.d.dooo.jp"
-#define TOROsWEBPAGE "http://toro.d.dooo.jp/index.html"
+#define TOROsWEB "https://toro.d.dooo.jp"
+#define TOROsWEB_GITHUB "https://toroidj.github.io"
+#define TOROsWEBPAGE "https://toro.d.dooo.jp/index.html"
 #define TOROsMAIL "toroid.jp@gmail.com"
-#define REPORTURL T("http://toro.d.dooo.jp/report/receive.cgi")
-#define CHECKVERSIONURL T("http://toro.d.dooo.jp/checkver/checkver.cgi")
+#define REPORTURL T("https://toro.d.dooo.jp/report/receive.cgi")
+#define CHECKVERSIONURL T("https://toro.d.dooo.jp/checkver/checkver.cgi")
 
 #ifdef UNICODE
 	#define CODETYPESTRING "UNICODE"
@@ -93,34 +94,40 @@
 
 //--------------------------------------------------------- 定数
 #define MAKE_WINTYPE(OSversion) (((OSversion).dwMajorVersion << 16) | (WORD)(OSversion).dwMinorVersion)
-//#define WINTYPE_95	0x40000
-//#define WINTYPE_98	0x4000a
-//#define WINTYPE_98SE	0x4000a
-//#define WINTYPE_me	0x4005a
-#define WINTYPE_NT4		0x40000
-#define WINTYPE_2000	0x50000
-#define WINTYPE_XP		0x50001
-#define WINTYPE_2003	0x50002
-#define WINTYPE_VISTA	0x60000 // 2008
-#define WINTYPE_7		0x60001 // 2008R2
-#define WINTYPE_8		0x60002 // 2012
-#define WINTYPE_81		0x60003 // 2012R2
-#define WINTYPE_10		0xa0000 // 10 / 11 / 2022
-#define WINTYPE_10_BUILD_TH1	10240 // 1507 LTS
-#define WINTYPE_10_BUILD_TH2	10586 // 1511
-#define WINTYPE_10_BUILD_RS1	14393 // 1607 LTS Server 2016
-#define WINTYPE_10_BUILD_RS2	15063 // 1703
-#define WINTYPE_10_BUILD_RS3	16299 // 1709
-#define WINTYPE_10_BUILD_RS4	17134 // 1803
-#define WINTYPE_10_BUILD_RS5	17763 // 1809 LTS Server 2019
-#define WINTYPE_10_BUILD_19H1	18362 // 1903
-#define WINTYPE_10_BUILD_19H2	18363 // 1909
-#define WINTYPE_10_BUILD_20H1	19041 // 2004
-#define WINTYPE_10_BUILD_20H2	19042 // 2009
-#define WINTYPE_10_BUILD_21H1	19043 // 2009
-#define WINTYPE_10_BUILD_21H2	19044 // 2009 LTS
-#define WINTYPE_2022			20348 // Server 2022
-#define WINTYPE_11_BUILD_21H1	22000
+//#define WINTYPE_95	0x40000 // build 950, 1111,1212-1214
+//#define WINTYPE_98	0x4000a // 1998
+//#define WINTYPE_98SE	0x4000a // 2222
+//#define WINTYPE_me	0x4005a // 3000
+//#define WINTYPE_NT31	0x30001 // 528
+//#define WINTYPE_NT35	0x30005 // 807
+#define WINTYPE_NT4		0x40000 // 1381
+#define WINTYPE_2000	0x50000 // 2195
+#define WINTYPE_XP		0x50001 // 2600
+#define WINTYPE_2003	0x50002 // XP 64bit, 3790
+#define WINTYPE_VISTA	0x60000 // Server 2008, 6000-6002
+#define WINTYPE_7		0x60001 // Server 2008R2, 7600, 7601
+#define WINTYPE_8		0x60002 // Server 2012, 9200
+#define WINTYPE_81		0x60003 // Server 2012R2, 9600
+#define WINTYPE_10		0xa0000 // 10 / 11 / Server 2022 / Server 2025
+#define WINBUILD_10_TH1	10240 // 1507 LTS
+#define WINBUILD_10_TH2	10586 // 1511
+#define WINBUILD_10_RS1	14393 // 1607 LTS Server 2016
+#define WINBUILD_10_RS2	15063 // 1703
+#define WINBUILD_10_RS3	16299 // 1709
+#define WINBUILD_10_RS4	17134 // 1803
+#define WINBUILD_10_RS5	17763 // 1809 LTS Server 2019
+#define WINBUILD_10_19H1	18362 // 1903
+#define WINBUILD_10_19H2	18363 // 1909
+#define WINBUILD_10_20H1	19041 // 2004
+#define WINBUILD_10_20H2	19042 // 2009
+#define WINBUILD_10_21H1	19043 // 2009
+#define WINBUILD_10_21H2	19044 // 2009 LTS
+#define WINBUILD_10_22H2	19045 //
+#define WINBUILD_2022		20348 // Server 2022
+#define WINBUILD_11_21H1	22000
+#define WINBUILD_11_22H2	22621
+#define WINBUILD_11_23H2	22631
+#define WINBUILD_11_24H2	26100 // Server 2025
 
 #define KB		0x400		// 1KiB
 #define KBd		1000		// 1KB
@@ -282,30 +289,47 @@
 	extern "C" {
 #endif
 #ifndef WINEGCC
-	#define strlenW(ptr) wcslen(ptr)
-	#define strcpyW(dst, src) wcscpy((dst), (src))
 	#ifdef __BORLANDC__		// Boland 用定義
 		#define stpcpyA(dst, src) stpcpy((dst), (src))
 	#else
 		extern char *stpcpyA(char *dst, const char *src);
 	#endif
 	extern WCHAR *stpcpyW(WCHAR *dst, const WCHAR *src);
+
+	// strnicmp の名前変更版。「n」が気づきにくいため
+	#define stricmppartA(str1, str2, size) strnicmp((str1), (str2), (size))
+	#define stricmppartW(str1, str2, size) _wcsnicmp((str1), (str2), (size))
+	// strncmp の名前変更版。「n」が気づきにくいため
+	#define strcmppartA(str1, str2, size) strncmp((str1), (str2), (size))
+	#define strcmppartW(str1, str2, size) wcsncmp((str1), (str2), (size))
+
+	#define strlenW(ptr) wcslen(ptr)
+	#define strcpyW(dst, src) wcscpy((dst), (src))
+
 	#define strcatW(dst, src) wcscat((dst), (src))
 	#define strcmpW(str1, str2) wcscmp((str1), (str2))
 	#define stricmpW(str1, str2) _wcsicmp((str1), (str2))
 	#define strnicmpW(str1, str2, size) _wcsnicmp((str1), (str2), (size))
-	#define strchrW wcschr
-	#define strrchrW wcsrchr
-	#define strstrW wcsstr
-	#define struprW _wcsupr
+	#define strncmpW(str1, str2, size) wcsncmp((str1), (str2), (size))
+	#define strchrW(str, code) wcschr((str), (code))
+	#define strrchrW(str, code) wcsrchr((str), (code))
+	#define strstrW(str1, str2) wcsstr((str1), (str2))
+	#define struprW(str) _wcsupr(str)
 #else // Wine on Linux
-	#define strlenW(ptr) (size_t)lstrlenW(ptr)
-	#define strcpyW(dst, src) lstrcpyW((dst), (src))
 	extern char *stpcpyA(char *dst, const char *src);
 	extern WCHAR *stpcpyW(WCHAR *dst, const WCHAR *src);
+
+	#define stricmppartA(str1, str2, size) strnicmp((str1), (str2), (size))
+	#define stricmppartW(str1, str2, size) strnicmpW((str1), (str2), (size))
+	#define strcmppartA(str1, str2, size) strncmp((str1), (str2), (size))
+	#define strcmppartW(str1, str2, size) wcsncmp((str1), (str2), (size))
+
+	#define strlenW(ptr) (size_t)lstrlenW(ptr)
+	#define strcpyW(dst, src) lstrcpyW((dst), (src))
 	#define strcatW(dst, src) lstrcatW((dst), (src))
 	#define strcmpW(str1, str2) lstrcmpW((str1), (str2))
 	#define stricmpW(str1, str2) lstrcmpiW((str1), (str2))
+	#define strncmpW(str1, str2, size) wcsncmp((str1), (str2), (size))
 	#define strnicmpW(str1, str2, size) (CompareStringW(GetUserDefaultLCID(), NORM_IGNORECASE, (str1), (size), (str2), (size)) - 2)
 	extern WCHAR *strchrW(const WCHAR *text, WCHAR findchar);
 	extern WCHAR *strrchrW(const WCHAR *text, WCHAR findchar);
@@ -325,17 +349,19 @@
 	#define tWinMain	wWinMain
 	#define tstrlen(ptr)	strlenW(ptr)
 	#define tstrcpy(dst, src)	strcpyW((dst), (src))
+	// str2 の一部分をコピーし、末尾を \0 に。len は str2 よりも短いことが前提
 	#define tstrcpypart(str1, str2, len)	{memcpy((char *)(WCHAR *)(str1), (const char *)(const WCHAR *)(str2), (len) * sizeof(WCHAR));*((WCHAR *)(str1) + (len)) = '\0';}
 	#define tstpcpy(dst, src)	stpcpyW((dst), (src))
 	#define tstrcat(dst, src)	strcatW((dst), (src))
 	#define tstrcmp(str1, str2)	strcmpW((str1), (str2))
 	#define tstricmp(str1, str2)	stricmpW((str1), (str2))
-	#define tstrnicmp	strnicmpW
-	#define tstrcmppart(str1, str2, len)	memcmp((const char *)(const WCHAR *)(str1), (const char *)(const WCHAR *)(str2), (len) * sizeof(WCHAR))
-	#define tstrchr	strchrW
-	#define tstrrchr	strrchrW
-	#define tstrstr	strstrW
+	#define tstricmppart(str1, str2, len)	strnicmpW((str1), (str2), (len))
+	#define tstrcmppart(str1, str2, len)	strncmpW((str1), (str2), (len))
+	#define tstrchr(str, code)	strchrW((str), (code))
+	#define tstrrchr(str, code)	strrchrW((str), (code))
+	#define tstrstr(str1, str2)	strstrW((str1), (str2))
 	#define tstrupr(str)	struprW(str)
+	// str 以降の文字列を len だけ移動させて隙間を設ける
 	#define tstrgap(str, len)	memmove((char *)(WCHAR *)((WCHAR *)(str) + (len)), (char *)(WCHAR *)(str), (strlenW(str) + 1) * sizeof(WCHAR))
 	#define TSTRSIZE(string)	((tstrlen(string) + 1) * sizeof(WCHAR))
 	#define TSTRLENGTH(string)	(tstrlen(string) * sizeof(WCHAR))
@@ -365,11 +391,11 @@
 	#define tstrcat(dst, src)	strcat((dst), (src))
 	#define tstrcmp(str1, str2)	strcmp((str1), (str2))
 	#define tstricmp(str1, str2)	stricmp((str1), (str2))
-	#define tstrnicmp	strnicmp
-	#define tstrcmppart(str1, str2, len)	memcmp((str1), (str2), (len))
-	#define tstrchr	strchr
-	#define tstrrchr	strrchr
-	#define tstrstr	strstr
+	#define tstricmppart(str1, str2, len)	strnicmp((str1), (str2), (len))
+	#define tstrcmppart(str1, str2, len)	strncmp((str1), (str2), (len))
+	#define tstrchr(str, code)	strchr((str), (code))
+	#define tstrrchr(str, code)	strrchr((str), (code))
+	#define tstrstr(str1, str2)	strstr((str1), (str2))
 	#define tstrupr(str)	strupr(str)
 	#define tstrgap(str, len)	memmove((char *)((char *)(str) + (len)), (char *)(str), (strlen(str) + 1) * sizeof(char))
 	#define TSTRSIZE(string)	(strlen(string) + 1)
@@ -428,6 +454,13 @@
 	#define UNIONNAME2(name, type) name.DUMMYUNIONNAME2.type
 	#define UNIONNAME3(name, type) name.DUMMYUNIONNAME3.type
 	#define UNIONNAME0(name, type) name.u.type
+	#define THREADEXRET DWORD
+	#define THREADEXCALL WINAPI
+	typedef THREADEXRET (THREADEXCALL *THREADEXFUNC)(void *);
+	#define t_beginthreadex(security, stack_size, start_address, arglist, initflag, threadid) \
+			CreateThread( (security), (stack_size), (start_address), \
+					(arglist), (initflag), (threadid) )
+	#define t_endthreadex(result) return (result)
 #else
 	#ifdef __GNUC__		// gcc 用定義
 		#define UnUsedParam(param)
@@ -439,6 +472,21 @@
 	#define UNIONNAME2(name, type) name.type
 	#define UNIONNAME3(name, type) name.type
 	#define UNIONNAME0(name, type) name.type
+	#define THREADEXRET unsigned int
+	#define THREADEXCALL __stdcall
+	typedef THREADEXRET (THREADEXCALL *THREADEXFUNC)(void *);
+
+	#ifdef WINEGCC		// wine 用定義
+		#define t_beginthreadex(security, stack_size, start_address, arglist, initflag, threadid) \
+			CreateThread( (security), (stack_size), (start_address), \
+					(arglist), (initflag), (threadid) )
+		#define t_endthreadex(result) return (result)
+	#else				// Microsoft 用定義
+		#define t_beginthreadex(security, stack_size, start_address, arglist, initflag, threadid) \
+			(HANDLE)_beginthreadex( (security), (stack_size), (start_address),\
+					(arglist), (initflag), (unsigned int *)(threadid))
+		#define t_endthreadex(result) {_endthreadex(result); return (result);}
+	#endif
 #endif
 #define DLLEntry DllMain
 
@@ -456,10 +504,8 @@ typedef DWORD ERRORCODE;	// Win32API のエラーコード(GetLastError)
 #define IsFalse(form)	((form) == FALSE)
 #define setflag(flag, bit)	flag |= (bit)  // 特定フラグを立てる
 #define resetflag(flag, bit)	flag &= ~(bit)  // 特定フラグを下げる
-#ifndef max
-	#define max(a, b) (((a) > (b)) ? (a) : (b))  // 大きいほうを返す
-	#define min(a, b) (((a) < (b)) ? (a) : (b))  // 小さいほうを返す
-#endif
+#define choosemax(a, b) (((a) > (b)) ? (a) : (b))  // 大きいほうを返す
+#define choosemin(a, b) (((a) < (b)) ? (a) : (b))  // 小さいほうを返す
 #define LPARAMtoPOINT(pos, lParam) {(pos).x=(int)(short)LOWORD(lParam);(pos).y=(int)(short)HIWORD(lParam);}
 #define GetMessagePosPoint(pos) {DWORD dpos = GetMessagePos();LPARAMtoPOINT((pos), (dpos));}
 #define LOSHORTINT(lp) ((int)(short)LOWORD(lp))
@@ -527,10 +573,11 @@ typedef union {
 	( ((DWORD)(leftH) == (DWORD)(rightH)) ? \
 		(((DWORD)(leftL) == (DWORD)(rightL)) ? 0 : \
 		  (((DWORD)(leftL) > (DWORD)(rightL)) ? 1 : -1)) : \
-		(((DWORD)(leftH) > (DWORD)(rightH)) ? 1 : -1) ) \
+		(((DWORD)(leftH) > (DWORD)(rightH)) ? 1 : -1) )
 
 #if _INTEGRAL_MAX_BITS >= 64
 	#define LetHL_0(dstIntHL) {(dstIntHL).QuadPart = 0;}
+	#define LetHighLowHL(dstIntHL, high, low) {(dstIntHL).HL = (__int64)(low) + ((__int64)(high) << 32);}
 	#define LetHLHL(dstIntHL, srcIntHL) {(dstIntHL).QuadPart = (srcIntHL).QuadPart;}
 	#define AddHLHL(dstIntHL, srcIntHL) {(dstIntHL).QuadPart += (srcIntHL).QuadPart;}
 	#define SubUHLHL(dstIntHL, srcIntHL) {(dstIntHL).QuadPart -= (srcIntHL).QuadPart;}
@@ -549,6 +596,7 @@ typedef union {
 		{(dstIntHL).QuadPart -= (__int64)(Fsize).nFileSizeLow + ((__int64)(Fsize).nFileSizeHigh << 32);}
 #else
 	#define LetHL_0(dstIntHL) {(dstIntHL).u.LowPart = (dstIntHL).u.HighPart = 0;}
+	#define LetHighLowHL(dstIntHL, high, low) {(dstIntHL).s.L = (low); (dstIntHL).s.H = (high);}
 	#define LetHLHL(dstIntHL, srcIntHL) {(dstIntHL) = (srcIntHL);}
 	#define AddHLHL(dstIntHL, srcIntHL)\
 		AddDD(((dstIntHL).s.L), ((dstIntHL).s.H), ((srcIntHL).s.L), ((srcIntHL).s.H))
@@ -655,7 +703,6 @@ typedef union {
 	#define strnicmp(str1, str2, size) (CompareStringA(GetUserDefaultLCID(), NORM_IGNORECASE, (str1), (size), (str2), (size)) - 2)
 	#define strupr(src) CharUpperA(src)
 	#define strlwr CharLowerA
-//	#define ImmAssociateContext(hWnd, hIMC) // 定義されていない
 #endif
 
 #ifndef GetWindowLongPtr

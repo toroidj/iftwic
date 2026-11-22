@@ -13,8 +13,8 @@ typedef struct {
 //	TCHAR	filename[MAX_PATH];	// 定義ファイル名(書き込み用)
 } CFG;
 //======================================================================== 雑用
-extern BOOL SizedWriteFile(HANDLE hFile, void *buffer, DWORD size);
-extern BOOL SizedReadFile(HANDLE hFile, void *buffer, DWORD size, DWORD *sizeptr);
+extern BOOL SizedWriteFile(_In_ HANDLE hFile, _In_ const void *buffer, _In_ DWORD size);
+extern BOOL SizedReadFile(_In_ HANDLE hFile, _Out_ void *buffer, _In_ DWORD size, _Inout_opt_ DWORD *sizeptr);
 extern void USEFASTCALL SkipSpaceB(char *b, char *p);
 extern BYTE USEFASTCALL SkipSpaceA(const char **str);
 

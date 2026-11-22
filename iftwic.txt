@@ -1,5 +1,5 @@
  ------------------------------------------------------------------------------
-	WIC Susie Plug-in		Version 2.2 Copyright (c)2013-2024 TORO
+    WIC Susie Plug-in         Version 2.2+2  Copyright (c)2013-2026 TORO
  ------------------------------------------------------------------------------
 
 	Windows XP/2003 以降から使用可能な WIC(Windows Imaging Component)
@@ -15,17 +15,17 @@
 	( http://www.digitalpad.co.jp/~takechin/ )
 
 
-●動作環境
-・対応/動作確認 OS
+## 動作環境
+### 対応/動作確認 OS
 
 	Windows 2003/XP 以降で動作します。
 
-・レジストリ
+### レジストリ
 
 	レジストリは使用しません。
 
 
-●WICについて
+## WICについて
 
 	WIC は標準で、BMP, PNG, ICO, JPG(JPEG), GIF, TIFF, HDP(HD Photo)
 	形式に対応しており、追加のコーデックをインストールすることに
@@ -39,7 +39,7 @@
 	XP 用 WIC を入手してください。
 
 
-●インストール
+## インストール
 
 	Susie Plug-in 用のディレクトリに iftwic.spi をコピーしてください。
 	64bit アプリケーションの場合は、iftwic.sph をコピーしてください
@@ -52,12 +52,12 @@
 	「ARM」内の iftwic.spha は、ARM64 ネイティブアプリケーション向けです。
 
 
-●アンインストール
+## アンインストール
 
 	コピーした iftwic.spi / iftwic.sph を削除してください。
 
 
-●設定と設定の保存先
+## 設定と設定の保存先
 
 	次の設定を行うことができます。
 
@@ -109,36 +109,37 @@
 	  X_GridColor2 = 224,224,224
 
 
-●64bit版 Susie Plug-in の仕様について
+## 64bit版 Susie Plug-in の仕様について
 
 	64bit版の正式な仕様がないため独自仕様にしています。
-	また、拡張子は .sph としています。詳細は添付の susie.h か、
-	次の場所を参照してください。
+	また、拡張子は .sph としています。詳細は次の場所を参照してください。
 
 	https://toro.d.dooo.jp/dlsphapi.html
 	https://toroidj.github.io/dlsphapi.html
 
 
-●最後に
+## 最後に
 
-	・このソフトウェアはフリーソフトウェアです。著作権は「TORO」、
+	* このソフトウェアはフリーソフトウェアです。著作権は「TORO」、
 	  「高橋 良和」にあります。
 
-	・このソフトウェアを使用した事による利益・損害等は、こちらでは
+	* このソフトウェアを使用した事による利益・損害等は、こちらでは
 	  一切責任を負いません。
 
-	・転載は自由に行えます。
+	* 転載は自由に行えます。
 	  本ソフトウェアが主となる営利目的での配布・使用はこちらに連絡下さい。
 
-	・x86 版と x64 版は、Visual Studio 2008 で構築しています。
+	* x86 版と x64 版は、Visual Studio 2008 で構築しています。
 	  ARM64 版は、Visual Studio 2022 を用いて構築しています。
 
-	・ソースを添付しています。個人で使用する範囲であれば自由に改変す
-	  ることができます。尚、プロジェクトファイルを添付していますが、
-	  配布ファイルの構築には使用しておらず、makefileを使用しています。
+	* ソースに VS プロジェクトファイルを添付していますが、
+	  配布ファイルの構築には使用しておらず、makefile を使用しています。
 
 
-●履歴
+## 履歴
+Version 2.2+2	2026/11/22
+・GetPictureInfo/W で Jpeg, TIFF の Exif 情報を取得できるように
+
 Version 2.2	2024/03/09
 ・0 バイトのファイルの読み込み時に異常終了することがあるのを修正
 
@@ -202,7 +203,7 @@ Version 0.2	2013/04/02
 Version 0.1	2013/03/30
 ・初版
 
-●連絡先／一次配布先						TORO／高橋 良和
-
-E-mail	toroid.jp@gmail.com
-WWW	https://toro.d.dooo.jp/	https://toroidj.github.io/
+## 著作権者／連絡先／一次配布先
+        TORO／高橋 良和
+E-mail  toroid.jp@gmail.com
+WWW     https://toro.d.dooo.jp/	https://toroidj.github.io/

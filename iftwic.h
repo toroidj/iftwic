@@ -3,12 +3,10 @@
 -----------------------------------------------------------------------------*/
 #define APPNAME "iftwic"
 
-#define NO_ERROR_MESSAGEBOX 0	// WIC が見つからないメッセージを表示しない
-
 #define CFG_COMPANY	"TOROID"	// AppData の直下に使用する名前
 #define CFG_APPNAME	APPNAME		// CFG_COMPANY の下に使用する名前
-#define VERSION		2, 2, 1
-#define VERSIONS	"2.21"
+#define VERSION		2, 2, 2
+#define VERSIONS	"2.2+2"
 #define Copyright	"Copyright (c)2013-2026 TORO"
 
 #define IDD_CONFIGE	10600
@@ -37,6 +35,8 @@
 #define IDS_COLUMN4J		(IDS_COLUMN4E + IDS_STRINGJP)
 
 // Susie Plug-in 関連の定義 ---------------------------------------------------
+// エラー定義
+typedef int SUSIE_ERROR;
 #define SUSIEERROR_NOERROR       0
 #define SUSIEERROR_NOTSUPPORT   -1
 #define SUSIEERROR_USERCANCEL    1
@@ -45,18 +45,23 @@
 #define SUSIEERROR_EMPTYMEMORY   4
 #define SUSIEERROR_FAULTMEMORY   5
 #define SUSIEERROR_FAULTREAD     6
-#define SUSIEERROR_RESERVED      7
+#define SUSIEERROR_RESERVED      7 // Susie 内部では Window 関係
 #define SUSIEERROR_INTERNAL      8
+#define SUSIEERROR_FILEWRITE     9 // Susie 内部で使用
+#define SUSIEERROR_EOF           10 // Susie 内部で使用
 
+// flag 定義
 #define SUSIE_SOURCE_MASK 7
 #define SUSIE_SOURCE_DISK 0
 #define SUSIE_SOURCE_MEM 1
-#define SUSIE_IGNORECASE 0x80
+#define SUSIE_SOURCE_IGNORECASE 0x80
 #define SUSIE_DEST_MASK 0x700
 #define SUSIE_DEST_DISK 0
 #define SUSIE_DEST_MEM 0x100
 #define SUSIE_DEST_REJECT_UNKNOWN_TYPE 0x800
+#define SUSIE_DEST_EXTRA_OPTION 0x1000
 
+// その他定義
 #define SUSIE_CHECK_SIZE (2 * 1024)
 #define SUSIE_PATH_MAX 200
 
@@ -66,7 +71,7 @@ typedef int (__stdcall *SUSIE_PROGRESS)(int nNum, int nDenom, LONG_PTR lData);
 // Susie 用の UNIX 時刻
 typedef ULONG_PTR susie_time_t;
 
-// Susie 構造体
+// 画像関係構造体
 #pragma pack(push, 1)
 typedef struct PictureInfo{
 	long    left, top;	// 画像を展開する位置
