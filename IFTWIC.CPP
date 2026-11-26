@@ -1525,18 +1525,35 @@ SUSIE_ERROR CopyPixels(HLOCAL *pHBm)
 	*pHBm = LocalAlloc(LMEM_FIXED, m_HeaderPtr->biSizeImage);
 	if ( *pHBm == NULL ) return SUSIEERROR_EMPTYMEMORY;
 
-	if ( SUCCEEDED(m_bmp->CopyPixels(NULL, Wsize, m_HeaderPtr->biSizeImage, (BYTE *)*pHBm)) ){
-		if ( AlphaConvert ){
-			m_result_flags |= SUSIE_DECODE_MERGE_ALPHA;
-			ConvertAlpha(reinterpret_cast<MaskBits *>(*pHBm),
-					reinterpret_cast<MaskBits *>(reinterpret_cast<BYTE *>(*pHBm) + m_HeaderPtr->biSizeImage) );
-			if ( X_SusieFix || X_Conv32NoAlpha ) ScaleTo24(pHBm, Wsize);
+	if ( FAILED(m_bmp->CopyPixels(NULL, Wsize, m_HeaderPtr->biSizeImage, (BYTE *)*pHBm)) ){
+		// 失敗。1行を DWORD アライメントから BYTE アライメントに変更して再実行
+		// ※ 該当エラーコードは WINCODEC_ERR_INSUFFICIENTBUFFER
+		//    (Webp Decoder 1.2.47.0) であるが、念のために全ての
+		//    エラーコードに対して再実行する
+		BYTE *dest = (BYTE *)*pHBm;
+		DWORD MWsize = (m_HeaderPtr->biWidth * m_HeaderPtr->biBitCount + 7) / 8;
+		WICRect box = {0, 0, m_HeaderPtr->biWidth, 1};
+
+		for(;;){
+			if ( FAILED(m_bmp->CopyPixels(&box, MWsize, Wsize, dest)) ){
+				LocalFree(*pHBm);
+				*pHBm = NULL;
+				return SUSIEERROR_BROKENDATA;
+			}
+			box.Y++;
+			dest += Wsize;
+			if ( box.Y >= m_HeaderPtr->biHeight ) break;
 		}
-		return SUSIEERROR_NOERROR;
 	}
-	LocalFree(*pHBm);
-	*pHBm = NULL;
-	return SUSIEERROR_BROKENDATA;
+
+	// 成功
+	if ( AlphaConvert ){
+		m_result_flags |= SUSIE_DECODE_MERGE_ALPHA;
+		ConvertAlpha(reinterpret_cast<MaskBits *>(*pHBm),
+				reinterpret_cast<MaskBits *>(reinterpret_cast<BYTE *>(*pHBm) + m_HeaderPtr->biSizeImage) );
+		if ( X_SusieFix || X_Conv32NoAlpha ) ScaleTo24(pHBm, Wsize);
+	}
+	return SUSIEERROR_NOERROR;
 }
 
 void CopyPalette(void)

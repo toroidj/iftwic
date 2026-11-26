@@ -1,7 +1,7 @@
 @echo off
 set RETAIL=1
 rem *** set value ***
-set arcname=iftwic22p2.zip
+set arcname=iftwic22p3.zip
 set readme=iftwic.txt
 set vername=iftwic.h
 set srcname=iftwics.7z

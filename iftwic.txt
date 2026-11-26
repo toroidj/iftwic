@@ -1,5 +1,5 @@
  ------------------------------------------------------------------------------
-    WIC Susie Plug-in         Version 2.2+2  Copyright (c)2013-2026 TORO
+    WIC Susie Plug-in         Version 2.2+3  Copyright (c)2013-2026 TORO
  ------------------------------------------------------------------------------
 
 	Windows XP/2003 以降から使用可能な WIC(Windows Imaging Component)
@@ -137,6 +137,9 @@
 
 
 ## 履歴
+Version 2.2+3	2026/11/26
+・Webp Decoder 1.2.47.0 で、画像幅が4で割り切れないときにデコード失敗する対策
+
 Version 2.2+2	2026/11/22
 ・GetPictureInfo/W で Jpeg, TIFF の Exif 情報を取得できるように
 

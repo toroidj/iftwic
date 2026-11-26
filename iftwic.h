@@ -5,8 +5,8 @@
 
 #define CFG_COMPANY	"TOROID"	// AppData の直下に使用する名前
 #define CFG_APPNAME	APPNAME		// CFG_COMPANY の下に使用する名前
-#define VERSION		2, 2, 2
-#define VERSIONS	"2.2+2"
+#define VERSION		2, 2, 3
+#define VERSIONS	"2.2+3"
 #define Copyright	"Copyright (c)2013-2026 TORO"
 
 #define IDD_CONFIGE	10600
